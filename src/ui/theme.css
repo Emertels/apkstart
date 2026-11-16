@@ -745,3 +745,100 @@ html, body {
 [data-theme="dark"] .empty-art rect[fill="#e6ecf3"] {
   fill: #222b26 !important;
 }
+
+
+/* ============================================================================
+ * SLIDER DE VOLUME VERDE E NOTAS ESCURAS
+ * ========================================================================== */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent !important;
+  accent-color: #12b886 !important;
+  cursor: pointer;
+  height: 20px;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8e4;
+  transition: background .15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #12b886;
+  box-shadow: 0 1px 4px rgba(18, 184, 134, .5);
+  margin-top: -5px;
+  transition: transform .12s ease, background .12s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: #2ee6a6;
+}
+
+[data-theme="dark"] input[type="range"]::-webkit-slider-runnable-track {
+  background: #26332b !important;
+}
+
+[data-theme="dark"] input[type="range"]::-webkit-slider-thumb {
+  background: #2ee6a6 !important;
+  box-shadow: 0 0 8px rgba(46, 230, 166, .6) !important;
+}
+
+/* Caixa de notas (.note) e descrições no modo escuro */
+[data-theme="dark"] .note {
+  background: #1b231f !important;
+  border: 1px solid #2e3d34 !important;
+  color: #b5c7bd !important;
+}
+
+[data-theme="dark"] .about-box {
+  background: #1b231f !important;
+  border-color: #2e3d34 !important;
+}
+
+[data-theme="dark"] .about-info .note {
+  background: #151c18 !important;
+  border: 1px solid #2a372e !important;
+  color: #c0d1c7 !important;
+}
+
+[data-theme="dark"] .welcome-body {
+  color: var(--text);
+}
+
+[data-theme="dark"] .welcome-stats {
+  background: #18201b !important;
+  border: 1px solid #2a372e !important;
+}
+
+[data-theme="dark"] .env-check {
+  background: #18201b !important;
+  border: 1px solid #2a372e !important;
+  color: var(--text) !important;
+}
+
+[data-theme="dark"] .steps .step {
+  background: #18201b !important;
+  border-color: #2a372e !important;
+}
+
+[data-theme="dark"] .setup-guide {
+  background: #18201b !important;
+  border-color: #2a372e !important;
+}
+
+[data-theme="dark"] kbd,
+[data-theme="dark"] code {
+  background: #242f28 !important;
+  border-color: #36463c !important;
+  color: #2ee6a6 !important;
+}

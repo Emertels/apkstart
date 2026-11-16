@@ -7,6 +7,7 @@
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   const theme = saved || (prefersDark ? 'dark' : 'light');
   document.documentElement.setAttribute('data-theme', theme);
+  if (window.apkstart && window.apkstart.setTheme) window.apkstart.setTheme(theme);
 
   window.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('btnThemeToggle');
@@ -15,6 +16,7 @@
         const cur = document.documentElement.getAttribute('data-theme');
         const next = cur === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
+        if (window.apkstart && window.apkstart.setTheme) window.apkstart.setTheme(next);
         localStorage.setItem('apkstart_theme', next);
       });
     }

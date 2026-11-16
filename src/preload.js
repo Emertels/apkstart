@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('apkstart', {
   revealApk: (pkg) => invoke('app:revealApk', pkg),
   revealApkDir: () => invoke('apk:reveal'),
   openDir: () => invoke('dialog:openDir'),
+  setTheme: (t) => invoke('theme:set', t),
 
   getSettings: () => invoke('settings:get'),
   setSettings: (patch) => invoke('settings:set', patch),

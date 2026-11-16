@@ -960,6 +960,19 @@ function startNotifier() {
 // ---------------- IPC ----------------
 
 function registerIpc() {
+  
+  ipcMain.handle('theme:set', (_e, theme) => {
+    try {
+      if (mainWindow && mainWindow.setTitleBarOverlay) {
+        if (theme === 'dark') {
+          mainWindow.setTitleBarOverlay({ color: '#111513', symbolColor: '#e6ede9', height: 44 });
+        } else {
+          mainWindow.setTitleBarOverlay({ color: '#f7f8fa', symbolColor: '#2b3138', height: 44 });
+        }
+      }
+    } catch (_) {}
+  });
+
   ipcMain.handle('app:info', () => ({    version: app.getVersion(),
     isDev: IS_DEV,
     dataDir: store.DATA_DIR,
