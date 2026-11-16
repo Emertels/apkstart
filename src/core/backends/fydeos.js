@@ -125,7 +125,7 @@ function detectVmHost() {
       { timeout: 4000, windowsHide: true, encoding: 'utf8' });
     for (const p of VM_PROCESSES) {
       if (new RegExp(`^"${p.name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\.exe"`, 'mi').test(out)) {
-        return { found: true, label: p.label, detail: `检测到 ${p.label} 正在运行` };
+        return { found: true, label: p.label, detail: `${p.label} detectado em execução` };
       }
     }
   } catch (_) { /* tasklist 失败就当没有 */ }
@@ -145,7 +145,7 @@ class FydeosBackend extends Backend {
 
   static get id() { return 'fydeos'; }
 
-  static get label() { return 'FydeOS 安卓子系统'; }
+  static get label() { return 'Subsistema Android FydeOS'; }
 
   static get summary() {
     return '用 FydeOS 自带的安卓环境跑应用，没有 Google 模拟器那层虚拟机。'
@@ -222,11 +222,11 @@ class FydeosBackend extends Backend {
       //   2) 有虚拟机在跑（大概率就是跑着 FydeOS）。
       const t = splitHost(this.hostOverride);
       if (t && await tcpAlive(t.host, t.port).catch(() => false)) {
-        return { ok: true, found: true, path: '', detail: `FydeOS 在 ${this.hostOverride} 上可达` };
+        return { ok: true, found: true, path: '', detail: `FydeOS acessível em ${this.hostOverride}` };
       }
       const vm = detectVmHost();
       if (vm.found) return { ok: true, found: true, path: '', detail: vm.detail };
-      return { ok: true, found: false, path: '', detail: '未检测到虚拟机或 FydeOS 地址' };
+      return { ok: true, found: false, path: '', detail: 'Máquina virtual ou endereço do FydeOS não detectado' };
     }
     const d = distroInfo();
     let portOpen = false;
@@ -236,7 +236,7 @@ class FydeosBackend extends Backend {
       ok: true,
       found,
       path: '',
-      detail: d.name || (portOpen ? '检测到本机 5555 端口（可能是 ARC）' : ''),
+      detail: d.name || (portOpen ? 'Porta local 5555 detectada (possível ARC)' : ''),
     };
   }
 
@@ -245,15 +245,15 @@ class FydeosBackend extends Backend {
     const r = await this._exec(['devices']);
     if (!r.out) {
       return IS_WIN
-        ? { ok: false, reason: '找不到 adb。请先完成运行时部署（设置 → 运行时 → 一键完成）。', needs: 'adb' }
-        : { ok: false, reason: '找不到 adb。请在 Linux 子系统里执行：sudo apt install adb', needs: 'adb' };
+        ? { ok: false, reason: 'adb não encontrado. Conclua a implantação do runtime primeiro (Configurações → Runtime → Instalação Automática).', needs: 'adb' }
+        : { ok: false, reason: 'adb não encontrado. Execute no subsistema Linux: sudo apt install adb', needs: 'adb' };
     }
     const online = /^\S+\s+device$/m.test(r.out);
     if (online) return { ok: true };
     if (/unauthorized/i.test(r.out)) {
       return {
         ok: false,
-        reason: 'FydeOS 弹出了「允许调试」授权框。请切到 FydeOS 的安卓界面点「允许」后重试。',
+        reason: 'O FydeOS exibiu uma solicitação de depuração. Mude para o FydeOS e clique em "Permitir".',
         needs: 'authorize',
       };
     }
@@ -289,7 +289,7 @@ class FydeosBackend extends Backend {
 
     // 依次尝试候选目标；连上后等它真的变成 device
     for (const target of this._targets()) {
-      onLog(`正在连接 FydeOS 安卓子系统：${target}…`);
+      onLog(`Conectando ao subsistema Android FydeOS: ${target}…`);
       // eslint-disable-next-line no-await-in-loop
       const c = await this._exec(['connect', target], { timeout: 10000 });
       const okConnect = /connected|already connected/i.test(c.out + c.err);
@@ -307,17 +307,17 @@ class FydeosBackend extends Backend {
           return { ok: true, serial: target, adbPath: this.adbPath };
         }
         if (/unauthorized/.test(d.out + d.err)) {
-          this.lastError = '需要授权';
-          onLog('FydeOS 弹出了「允许调试」授权框，请在安卓界面点「允许」…');
+          this.lastError = 'Autorização necessária';
+          onLog('O FydeOS exibiu aviso de depuração, clique em "Permitir" na tela do Android…');
         }
         // eslint-disable-next-line no-await-in-loop
         await sleep(1000);
       }
-      this.lastError = this.lastError || '连接后设备未就绪';
+      this.lastError = this.lastError || 'Dispositivo não está pronto após conexão';
     }
     return {
       ok: false,
-      error: this.lastError || '没能连上 FydeOS 安卓子系统。请确认已开启「ADB 调试」，并允许授权框。',
+      error: this.lastError || 'Não foi possível conectar ao FydeOS. Verifique se a depuração ADB está ativada e autorizada.',
     };
   }
 
@@ -336,12 +336,12 @@ class FydeosBackend extends Backend {
     if (this.serial) {
       await this._exec(['disconnect', this.serial], { timeout: 5000 }).catch(() => {});
     }
-    return { ok: true, note: 'FydeOS 的安卓子系统由系统管理，这里只断开连接' };
+    return { ok: true, note: 'O subsistema Android é gerenciado pelo FydeOS, apenas desconectado aqui' };
   }
 
   usage() { return { total: 0, items: [] }; }
 
-  dataInfo() { return { ok: false, note: '数据由 FydeOS 系统管理' }; }
+  dataInfo() { return { ok: false, note: 'Os dados são gerenciados pelo FydeOS' }; }
 
   diagnose() {
     const d = distroInfo();

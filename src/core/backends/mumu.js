@@ -91,7 +91,7 @@ function spawnSyncSafe(cmd, args) {
 class MumuBackend extends Backend {
   static get id() { return 'mumu'; }
 
-  static get label() { return 'MuMu 模拟器 12（复用已安装的网易模拟器）'; }
+  static get label() { return 'Emulador MuMu 12 (reutiliza emulador instalado)'; }
 
   static get summary() {
     return '不下载任何安卓镜像：直接驱动你电脑上已经装好的 MuMu 模拟器 12，'
@@ -179,7 +179,7 @@ class MumuBackend extends Backend {
 
   async probe() {
     const loc = this.locate();
-    if (!loc) return { ok: true, found: false, detail: '没有找到 MuMuManager.exe' };
+    if (!loc) return { ok: true, found: false, detail: 'MuMuManager.exe não encontrado' };
     const info = await this.manager(['version'], { timeout: 8000 });
     return {
       ok: true, found: true, path: loc.manager, detail: (info && info.version) || '', root: loc.root,
@@ -188,8 +188,8 @@ class MumuBackend extends Backend {
 
   async check() {
     const loc = this.locate();
-    if (!loc) return { ok: false, reason: '没有找到 MuMu 模拟器（可在设置里指定安装目录）', needs: 'mumu' };
-    if (!loc.adb) return { ok: false, reason: 'MuMu 目录里找不到 adb.exe', needs: 'mumu' };
+    if (!loc) return { ok: false, reason: 'Emulador MuMu não encontrado (especifique o diretório nas configurações)', needs: 'mumu' };
+    if (!loc.adb) return { ok: false, reason: 'adb.exe não encontrado no diretório do MuMu', needs: 'mumu' };
     return { ok: true, path: loc.manager };
   }
 
@@ -225,16 +225,16 @@ class MumuBackend extends Backend {
   async ensure({ onLog = () => {} } = {}) {
     const loc = this.locate();
     if (!loc) {
-      return { ok: false, error: '没有找到 MuMu 模拟器。请先安装网易 MuMu 模拟器 12，或在设置里指定它的安装目录。' };
+      return { ok: false, error: 'Emulador MuMu não encontrado. Instale o MuMu 12 ou especifique o diretório nas configurações.' };
     }
     let info = await this.info({ fresh: true });
     const wasRunning = !!(info && info.is_android_started);
     if (!wasRunning) {
-      onLog(info && info.is_process_started ? 'MuMu 模拟器正在开机…' : '正在启动 MuMu 模拟器…');
+      onLog(info && info.is_process_started ? 'MuMu iniciando sistema…' : 'Iniciando emulador MuMu…');
       await this.manager(['control', 'launch', '-v', String(this.index)], { timeout: 30000 });
       this._stoppedByUs = false;
       info = await this.waitReady({ onLog });
-      if (!info) return { ok: false, error: 'MuMu 模拟器启动超时（120 秒内没有进入安卓桌面）' };
+      if (!info) return { ok: false, error: 'Tempo limite esgotado ao iniciar o MuMu (área de trabalho Android não respondeu em 120s)' };
     }
     this.serial = `${info.adb_host_ip || '127.0.0.1'}:${info.adb_port}`;
     this.adbPath = loc.adb;

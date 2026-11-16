@@ -284,7 +284,7 @@ class Runtime {
 
     if (!env.adb.ok) {
       result.needsSetup = 'adb';
-      result.error = '缺少 adb：点击「一键部署」自动下载';
+      result.error = 'adb ausente: clique em "Instalação Automática" para baixar';
       return result;
     }
 
@@ -420,7 +420,7 @@ class Runtime {
 
     const accel = env && env.accel ? env.accel : await this.provisioner.emulatorAccel();
     if (!accel.ok) {
-      onLog('未检测到硬件加速：将自动回退软件模拟（首次开机会明显变慢，无需手动设置）');
+      onLog('Aceleração por hardware não detectada: retornando à emulação por software (inicialização mais lenta)');
     }
 
     this.vmStarting = true;
@@ -453,7 +453,7 @@ class Runtime {
           const now = Date.now();
           if (errStreak >= 6 && now - probeStart > 25000 && now - lastHeal > 30000) {
             lastHeal = now;
-            onLog('adb 连接异常，重启 adb server 后继续等待…');
+            onLog('Conexão adb anormal, reiniciando adb server…');
             await this.emulator.resetAdbServer().catch(() => {});
             this._probeClient = null;
           }
@@ -472,7 +472,7 @@ class Runtime {
       if (!st || st.ok === false) {
         return {
           ok: false,
-          error: (st && st.error) || '安卓运行时未能启动',
+          error: (st && st.error) || 'O runtime Android não pôde ser iniciado',
           needsSpace: !!(st && st.needsSpace),
           attempts: (st && st.attempts) || [],
           diagnosis: this.emulator.lastDiagnosis,
@@ -538,18 +538,18 @@ class Runtime {
       try {
         // 第三方底座：直接叫它开机，不需要检查 apkstart 自己的镜像环境
         if (this.backend.id !== 'builtin') {
-          const r = await this.ensure({ onLog: (m) => onLog(`预热：${m}`) });
+          const r = await this.ensure({ onLog: (m) => onLog(`Pré-aquecimento: ${m}` ) });
           if (r && r.ok) return { ok: true, bootMs: Date.now() - t0 };
           return { ok: false, error: r && r.error };
         }
         const env = await this.provisioner.checkEnv();
         if (!(env.adb.ok && env.emulator.ok && env.sysimg.ok)) return { ok: false, skipped: 'not-ready' };
-        const r = await this.ensure({ onLog: (m) => onLog(`预热：${m}`) });
+        const r = await this.ensure({ onLog: (m) => onLog(`Pré-aquecimento: ${m}` ) });
         if (r && r.ok) {
           // 预热期间用户可能已经点开了应用：这时不能把它摁到 idle 优先级
           if (this._activeApps.size === 0) await this.emulator.setPriority('idle').catch(() => {});
           const ms = Date.now() - t0;
-          this.log(`预热完成（${Math.round(ms / 1000)}s）`);
+          this.log(`Pré-aquecimento concluído (${Math.round(ms / 1000)}s)`);
           return { ok: true, bootMs: ms };
         }
         return { ok: false, error: r && r.error };
@@ -591,13 +591,13 @@ class Runtime {
 
     proc.on('error', (e) => {
       this.log(`spawn error: ${e.message}`);
-      onLog(`启动失败：${e.message}`);
+      onLog(`Falha ao iniciar: ${e.message}`);
       this.vmProc = null;
       this.vmStarting = false;
     });
     proc.on('exit', (code) => {
       this.log(`qemu exit ${code}`);
-      onLog(`运行时已退出（code=${code}）`);
+      onLog(`Runtime encerrado (código=${code})`);
       this.vmProc = null;
       this.vmStarting = false;
       this.installing = false;
@@ -653,13 +653,13 @@ class Runtime {
           const v = await client.shell('getprop sys.boot_completed').catch(() => '');
           if (String(v).trim() === '1') {
             bootCompleted = true;
-            onLog(`Android 内核已启动，等待系统服务就绪…（${Math.round((Date.now() - start) / 1000)}s）`);
+            onLog(`Kernel Android iniciado, aguardando serviços… (${Math.round((Date.now() - start) / 1000)}s)`);
           }
         }
         if (bootCompleted) {
           const pm = await client.shell('pm path android').catch(() => '');
           if (/package:/.test(pm)) {
-            onLog(`Android 已就绪（${Math.round((Date.now() - start) / 1000)}s）`);
+            onLog(`Android pronto (${Math.round((Date.now() - start) / 1000)}s)`);
             return { ok: true, ms: Date.now() - start };
           }
         }
@@ -691,7 +691,7 @@ class Runtime {
       if (await client.isOnline()) return true;
       if (Date.now() - lastNotice > 20000) {
         lastNotice = Date.now();
-        onLog(`等待 Android 启动… ${Math.round((Date.now() - start) / 1000)}s`);
+        onLog(`Aguardando inicialização do Android… ${Math.round((Date.now() - start) / 1000)}s`);
       }
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 2000));
@@ -895,7 +895,7 @@ class Runtime {
   async adoptExisting({ onLog = () => {} } = {}) {
     const alive = await this.emulatorPorts();
     if (!alive.length) {
-      onLog('没有发现上一台运行时，准备冷启动');
+      onLog('Nenhum runtime anterior ativo, iniciando cold boot…');
       return null;
     }
     onLog(`发现 ${alive.length} 台残留运行时（端口 ${alive.join(', ')}），尝试接管`);
@@ -1035,7 +1035,7 @@ class Runtime {
 
     // 进程还在但设备离线（多半卡在引导）：先停掉再重新拉起，避免干等
     if (this.emulator.running()) {
-      onLog('检测到卡住的运行时，正在重启…');
+      onLog('Runtime travado detectado, reiniciando…');
       await this.emulator.stop({ adbPath: this.adbPath() });
     }
 
@@ -1043,7 +1043,7 @@ class Runtime {
 
     // 高级模式：连接已有运行时
     if (s.engine.mode === 'attach') {
-      onLog('正在探测已有运行时…');
+      onLog('Detectando instâncias de runtime existentes…');
       const found = await this.probe();
       if (found.length) {
         store.saveSettings({ device: found[0].serial });
@@ -1053,7 +1053,7 @@ class Runtime {
           return { ok: true, client: c2, engine: found[0].name };
         }
       }
-      return { ok: false, needsSetup: 'attach', error: '未发现可用的已有运行时' };
+      return { ok: false, needsSetup: 'attach', error: 'Nenhum runtime utilizável encontrado' };
     }
 
     // 默认：自带运行时
@@ -1391,7 +1391,7 @@ class Runtime {
       }
       if (Date.now() - lastNotice > 10000) {
         lastNotice = Date.now();
-        onLog(`正在等待安卓虚拟机联网… ${Math.round((Date.now() - t0) / 1000)}s`);
+        onLog(`Aguardando conexão da máquina virtual… ${Math.round((Date.now() - t0) / 1000)}s`);
       }
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 3000));
@@ -1420,13 +1420,13 @@ class Runtime {
     // 实机上这才是绝大多数「虚拟机没网」的真正原因（见 emulator.repairWifi 注释）。
     if (!this._wifiRepairTried) {
       this._wifiRepairTried = true;
-      onLog('虚拟机连不上 Wi-Fi，正在尝试重新连接…');
+      onLog('Máquina virtual não conectou ao Wi-Fi, tentando reconectar…');
       try {
         const fixed = await this.emulator.repairWifi(this.adbPath());
         if (fixed) {
           net = await this.waitForNetwork({ onLog, timeoutMs: 15000 });
           if (net && net.ok) {
-            onLog(`网络已恢复（${net.ip || ''}），正在保存可用状态，下次直接就好。`);
+            onLog(`Rede restaurada (${net.ip || ''}), salvando estado para inicializações rápidas.`);
             try { await this.emulator.saveSnapshotNow(this.adbPath(), { timeout: 90000 }); } catch (_) { /* ignore */ }
             return net;
           }
@@ -1437,7 +1437,7 @@ class Runtime {
     // 用户感受到的就是「点开要等好几分钟」。
     if (this._netColdBootTried) return net;
     this._netColdBootTried = true;
-    onLog('网络仍未就绪，正在冷启动一次虚拟机（不加载快照）后重试…');
+    onLog('Rede ainda indisponível, realizando inicialização a frio da máquina virtual…');
     try {
       await this.stop({ graceful: false }).catch(() => {});
       this.emulator.forceColdBootOnNextStart();
@@ -1466,11 +1466,11 @@ class Runtime {
       //   1) 重新连一次 Wi-Fi（不重启、不动数据）
       //   2) 冷启动（不加载快照，仍不动数据）
       //   3) 最后才重置数据
-      onLog('正在修复虚拟机网络：先尝试重新连接 Wi-Fi（不影响已装应用）…');
+      onLog('Reparando rede da VM: tentando reconectar ao Wi-Fi (preserva apps instalados)…');
       if (!this.vmRunning) {
         const boot0 = await this.ensure({ onLog });
         if (!boot0 || !boot0.ok) {
-          return { ok: false, error: (boot0 && boot0.error) || '虚拟机没能启动', boot: false };
+          return { ok: false, error: (boot0 && boot0.error) || 'A máquina virtual não pôde ser iniciada', boot: false };
         }
       }
       this._wifiRepairTried = true;
@@ -1480,43 +1480,43 @@ class Runtime {
         const net1 = await this.waitForNetwork({ onLog, timeoutMs: 30000 });
         if (net1 && net1.ok) {
           try { await this.emulator.saveSnapshotNow(this.adbPath(), { timeout: 90000 }); } catch (_) { /* ignore */ }
-          onLog(`网络已恢复（${net1.ip || ''}），已存好可用快照。`);
+          onLog(`Rede restaurada (${net1.ip || ''}), instantâneo salvo com sucesso.`);
           return { ok: true, network: net1, boot: true, wiped: false };
         }
       }
       // 第 2 步：冷启动，绕开可能「没网」的快照
-      onLog('重新连接没成功，正在冷启动一次虚拟机（不加载快照，数据保留）…');
+      onLog('Reconexão sem sucesso. Realizando inicialização a frio (sem snapshot, dados preservados)…');
       await this.stop({ graceful: false }).catch(() => {});
       await new Promise((r) => setTimeout(r, 2500));
       this.emulator.forceColdBootOnNextStart();
       const boot = await this.ensure({ onLog });
       if (!boot || !boot.ok) {
-        return { ok: false, error: (boot && boot.error) || '虚拟机没能启动', boot: false };
+        return { ok: false, error: (boot && boot.error) || 'A máquina virtual não pôde ser iniciada', boot: false };
       }
       let network = await this.waitForNetwork({ onLog, timeoutMs: 90000 });
       if (network && network.ok) {
         try { await this.emulator.saveSnapshotNow(this.adbPath(), { timeout: 90000 }); } catch (_) { /* ignore */ }
-        onLog(`网络已恢复（${network.ip || ''}），已存好可用快照。`);
+        onLog(`Rede restaurada (${network.ip || ''}), instantâneo salvo com sucesso.`);
         return { ok: true, network, boot: true, wiped: false };
       }
       // 第 3 步：还没网，只能重置数据了（会丢应用内数据）
-      onLog('仍然没有网络，正在重置安卓数据并重新开机（应用清单会保留，点开时自动重装）…');
+      onLog('Rede ainda indisponível. Redefinindo dados do Android (lista de apps preservada)…');
       if (this.vmRunning) await this.stop({ graceful: false }).catch(() => {});
       // 给上一次的 qemu / netsimd 一点时间退干净，否则 -wipe-data 会撞 AVD 锁
       await new Promise((r) => setTimeout(r, 2500));
       this.emulator.forceWipeOnNextStart();
       const boot2 = await this.ensure({ onLog });
       if (!boot2 || !boot2.ok) {
-        return { ok: false, error: (boot2 && boot2.error) || '虚拟机没能启动', boot: false, wiped: true };
+        return { ok: false, error: (boot2 && boot2.error) || 'A máquina virtual não pôde ser iniciada', boot: false, wiped: true };
       }
       network = await this.waitForNetwork({ onLog, timeoutMs: 240000 });
       if (network && network.ok) {
         // 立刻把「网络正常」的状态存成快照：下次恢复时网卡状态一起还原，
         // 否则关掉再开又会回到没网状态。
         try { await this.emulator.saveSnapshotNow(this.adbPath(), { timeout: 90000 }); } catch (_) { /* ignore */ }
-        onLog(`网络已恢复（${network.ip || ''} 网关 ${network.gateway || '可达'}），已存好可用快照。`);
+        onLog(`Rede restaurada (${network.ip || ''} gateway ${network.gateway || 'acessível'}), instantâneo salvo.`);
       } else {
-        onLog('重置后仍未联网。请检查本机网络/防火墙是否拦截了模拟器（netsimd 走本机回环端口）。');
+        onLog('Ainda sem conexão após redefinição. Verifique se o firewall do Windows bloqueia o netsimd.');
       }
       return { ok: !!(network && network.ok), network, boot: true, wiped: true };
     } catch (e) {

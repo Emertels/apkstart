@@ -307,7 +307,7 @@ async function restartForOrientation(landscape, { reloadApp = true } = {}) {
   if (!appWin || !appWin.isOpen) return false;
   const pkg = appWin.pkg;
   store.saveSettings({ display: { landscape: !!landscape } });
-  send('runtime:log', landscape ? '切换到横屏：正在重启安卓运行时…' : '切换回竖屏：正在重启安卓运行时…');
+  send('runtime:log', landscape ? 'Alternando para modo paisagem: reiniciando runtime Android…' : 'Retornando ao modo retrato: reiniciando runtime Android…');
   try {
     // 先把嵌入窗口摘下来，避免重启过程中在桌面留下黑窗
     try { await appWin.agent.detach(); } catch (_) { /* ignore */ }
@@ -387,7 +387,7 @@ function openAppWindow(pkg, tip) {
   appWin.setIcon(rec && rec.icoPath);
   // 打开时按已保存的方向初始化（物理面板方向在 doctor.lcdFor 里决定）
   appWin.setState({
-    tip: tip || '正在启动安卓运行时…',
+    tip: tip || 'Iniciando o ambiente de execução Android…',
     ready: false,
     landscape: !!displaySettings().landscape,
   });
@@ -431,7 +431,7 @@ async function autoDeploy() {
         if (afterPack.emulator.ok && afterPack.sysimg.ok) return { ok: true, source: 'github' };
         progress({ message: 'Pacote do runtime incompleto, completando via fonte oficial…' });
       } catch (e) {
-        progress({ message: `GitHub 运行时不可用（${e.message}），改用官方源…` });
+        progress({ message: `Runtime do GitHub indisponível (${e.message}), usando fonte oficial…` });
       }
     }
     if (!env.adb.ok) {
@@ -486,7 +486,7 @@ function enableWindowsFeature(feature) {
     const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps],
       { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     proc.on('exit', (code) => resolve({ ok: code === 0, restart: true, code }));
-    proc.on('error', () => resolve({ ok: false, error: '无法启动 PowerShell' }));
+    proc.on('error', () => resolve({ ok: false, error: 'Não foi possível iniciar o PowerShell' }));
   });
 }
 
@@ -499,10 +499,10 @@ function createWindow({ show = true } = {}) {
     minWidth: 900,
     minHeight: 560,
     show: false,
-    backgroundColor: '#f7f8fa',
+    backgroundColor: '#161c18',
     frame: false,
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#f7f8fa', symbolColor: '#2b3138', height: 44 },
+    titleBarOverlay: { color: '#161c18', symbolColor: '#2ee6a6', height: 44 },
     icon: nativeImage.createFromBuffer(ICON_PNG),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -672,10 +672,10 @@ async function runInstall(filePath) {
   if (installBusy) {
     if (installBusy === filePath) {
       send('toast', { type: 'info', message: 'Este APK já está sendo instalado, aguarde…' });
-      return { ok: false, error: '正在安装中' };
+      return { ok: false, error: 'Instalação já em andamento' };
     }
     send('toast', { type: 'info', message: 'Já existe uma instalação em andamento, aguarde terminar.' });
-    return { ok: false, error: '已有安装任务在进行' };
+    return { ok: false, error: 'Já existe uma tarefa de instalação em execução' };
   }
   installBusy = filePath;
   send('install:start', { file: filePath });
@@ -709,16 +709,16 @@ async function runInstall(filePath) {
  * 界面与托盘菜单共用这一条路径。
  */
 async function runUpdate() {
-  if (updateBusy) return { ok: false, error: '正在更新中' };
+  if (updateBusy) return { ok: false, error: 'Atualização já em andamento' };
   updateBusy = true;
   const sendProgress = (p) => send('update:progress', p);
   try {
     const info = updateInfo && updateInfo.hasUpdate ? updateInfo : await updater.check();
     updateInfo = info;
-    if (!info.hasUpdate) return { ok: false, error: '已经是最新版本' };
+    if (!info.hasUpdate) return { ok: false, error: 'Você já está na versão mais recente' };
     if (!info.asset) {
       shell.openExternal(info.htmlUrl || Updater.repoUrl()).catch(() => {});
-      return { ok: false, error: '该版本没有可直接安装的包，已打开 GitHub 发布页', manual: true };
+      return { ok: false, error: 'Esta versão não possui pacote para instalação direta, página do GitHub aberta', manual: true };
     }
     sendProgress({ stage: 'download', percent: 0, message: 'Preparando download…' });
     const job = await updater.prepare(info);
@@ -745,7 +745,7 @@ async function runLaunch(pkg) {
   appLog(`launch start ${pkg}`);
   try {
     // 1) 先把「应用窗口」打开显示启动动画：整个过程看不到安卓桌面，也看不到模拟器窗口
-    openAppWindow(pkg, '正在启动安卓运行时…');
+    openAppWindow(pkg, 'Iniciando o ambiente de execução Android…');
     // 开机阶段把模拟器主窗 + qemu / netsimd 的控制台黑窗藏起来，避免任何闪现。
     // 压制是常驻的（embed 后它会自动跳过被嵌入的那一个窗口，见 appwin.embed）。
     // 这里必须 await：不等压制生效就往下走，黑窗会在启动瞬间露出来。
@@ -780,7 +780,7 @@ async function runLaunch(pkg) {
         const isBuiltin = !runtime.backend || runtime.backend.id === 'builtin';
         if (cur !== null && cur !== wantLand && isBuiltin) {
           mark(`orientation mismatch (panel=${cur ? 'landscape' : 'portrait'}, want=${wantLand}) 重启校正`);
-          appWin.setState({ tip: wantLand ? '正在切换到横屏…' : '正在切换到竖屏…' });
+          appWin.setState({ tip: wantLand ? 'Alternando para modo paisagem…' : 'Alternando para modo retrato…' });
           // restartForOrientation 重启运行时后返回新的 rt（旧 client 已失效）。
           // 把它返回给 installer.launch，后续的 resetDisplayOverrides / startApp
           // 都用新 client，否则全部静默失败（catch 吞掉，应用起不来画面）。
@@ -788,7 +788,7 @@ async function runLaunch(pkg) {
           mark('orientation fixed');
           if (newRt && newRt.ok) return newRt;
         }
-        appWin.setState({ tip: '正在打开应用…' });
+        appWin.setState({ tip: 'Abrindo aplicativo…' });
         // 沉浸式 + 关动画 + 收起锁屏：只做一次，之后每次启动都秒进
         await rt.client.prepareForeground().catch(() => {});
         mark('foreground ready');
@@ -812,7 +812,7 @@ async function runLaunch(pkg) {
       mark(`windowReady=${ready && ready.ok}${ready && ready.reason ? `(${ready.reason})` : ''}`);
       if (!ready || !ready.ok) {
         // 拿不到窗口也别把应用窗口晾着：给用户一句能看懂的话
-        appWin.setState({ tip: `等待 ${backend.label} 的画面窗口…` });
+        appWin.setState({ tip: `Aguardando janela de exibição do ${backend.label}…` });
         await new Promise((r) => setTimeout(r, 1200));
       }
     }
@@ -873,7 +873,7 @@ async function runLaunch(pkg) {
     // 下次点应用还是走同一条隐藏 → embed 的路径。
     if (winAgent) armAgent(winAgent).catch(() => {});
     showWindow();
-    send('toast', { type: 'error', message: `启动失败：${e.message}` });
+    send('toast', { type: 'error', message: `Falha ao iniciar: ${e.message}` });
     return { ok: false, error: e.message };
   }
 }
@@ -909,7 +909,7 @@ function onContainerActive(on) {
  */
 async function stopApp(pkg, opts = {}) {
   const target = pkg || currentAppPkg;
-  if (!target) return { ok: false, error: '没有正在运行的应用' };
+  if (!target) return { ok: false, error: 'Nenhum aplicativo em execução' };
   const detached = displaySettings().windowEmbed === false;
   try {
     await runtime.endApp(target, { onIdle: (idle) => onContainerActive(idle) }).catch(() => {});
@@ -963,11 +963,14 @@ function registerIpc() {
   
   ipcMain.handle('theme:set', (_e, theme) => {
     try {
+      if (typeof nativeTheme !== 'undefined') {
+        nativeTheme.themeSource = theme === 'light' ? 'light' : 'dark';
+      }
       if (mainWindow && mainWindow.setTitleBarOverlay) {
-        if (theme === 'dark') {
-          mainWindow.setTitleBarOverlay({ color: '#111513', symbolColor: '#e6ede9', height: 44 });
-        } else {
+        if (theme === 'light') {
           mainWindow.setTitleBarOverlay({ color: '#f7f8fa', symbolColor: '#2b3138', height: 44 });
+        } else {
+          mainWindow.setTitleBarOverlay({ color: '#161c18', symbolColor: '#2ee6a6', height: 44 });
         }
       }
     } catch (_) {}
@@ -1062,7 +1065,7 @@ function registerIpc() {
 
   ipcMain.handle('app:shortcut', async (_e, pkg) => {
     const appRecord = store.getApp(pkg);
-    if (!appRecord) throw new Error('应用不存在');
+    if (!appRecord) throw new Error('Aplicativo não encontrado');
     const p = installer.createShortcut(appRecord);
     store.upsertApp({ package: pkg, shortcutPath: p });
     return { ok: true, path: p };
@@ -1128,7 +1131,7 @@ function registerIpc() {
         if (appWin && appWin.isOpen) appWin.close({ keepApp: false });
         runtime?.resetBackend?.();
         deviceSize.value = null;
-        send('runtime:log', `已切换运行时底座：${runtime.backend.label}`);
+        send('runtime:log', `Base do runtime alterada: ${runtime.backend.label}`);
       } catch (_) { /* ignore */ }
     }
     return next;
@@ -1156,7 +1159,7 @@ function registerIpc() {
    * 再保存设置。Sharer 每次同步都动态读 store.getSettings().sharedDir，无需重启即可生效。
    */
   ipcMain.handle('settings:setSharedDir', async (_e, dir) => {
-    if (!dir || !dir.trim()) return { ok: false, error: '目录不能为空' };
+    if (!dir || !dir.trim()) return { ok: false, error: 'O diretório não pode ficar vazio' };
     const newDir = dir.trim();
     const oldDir = store.getSettings().sharedDir;
     try {
@@ -1267,14 +1270,14 @@ function registerIpc() {
       if (free && free < 8192) {
         issues.push({
           code: 'disk', severity: free < 2048 ? 'error' : 'warn', title: 'Pouco espaço em disco para o runtime',
-          hint: `「${runtime.provisioner.paths().root}」所在盘仅剩 ${free} MB，运行时与镜像可能撑爆硬盘。`, fix: 'disk',
+          hint: `「${runtime.provisioner.paths().root}" tem apenas ${free} MB livres. O ambiente e as imagens podem esgotar o disco.`, fix: 'disk',
         });
       }
       const rtDir = runtime.provisioner.paths().root;
       if (!doctor.isAsciiPath(rtDir)) {
         issues.push({
           code: 'pathRuntime', severity: 'warn', title: 'Pasta do runtime contém caracteres especiais',
-          hint: '部分运行时组件对中文路径敏感，可能引发启动失败。建议改到纯英文目录。', fix: 'path',
+          hint: 'Alguns componentes são sensíveis a caminhos com acentuação ou espaços, o que pode causar falhas. Recomenda-se usar um diretório simples.', fix: 'path',
         });
       }
       const env = await runtime.provisioner.checkEnv().catch(() => ({}));
@@ -1393,9 +1396,9 @@ function registerIpc() {
       title: 'Confirmar limpeza do cache do runtime',
       message: `Liberará aproximadamente ${(preview.candidates.reduce((n, c) => n + c.size, 0) / 1048576).toFixed(0)} MB`,
       detail: (opts.includeSnapshots
-        ? '会先停止运行时，再删除旧镜像、当前 AVD 的快速启动快照、锁文件和非活动 AVD 的缓存。已安装的应用本身保留（只清快照），'
-        : '只删除旧镜像、旧快照、锁文件和非活动 AVD 的缓存，已安装的应用会保留。')
-        + '此操作不可撤销，建议先导出诊断报告。',
+        ? 'O runtime será interrompido primeiro, e em seguida as imagens antigas, instantâneos do AVD atual, arquivos de trava e cache de AVDs inativos serão excluídos. Os aplicativos instalados serão preservados (apenas instantâneos são limpos), '
+        : 'Apenas imagens antigas, instantâneos antigos, arquivos de trava e cache de AVDs inativos serão excluídos; os aplicativos instalados serão preservados.')
+        + ' Esta operação é irreversível. Recomenda-se exportar um relatório de diagnóstico antes.',
     });
     if (response !== 1) return { ...preview, cancelled: true };
     return runtime.cleanup({ apply: true, aggressive: !!opts.aggressive, includeSnapshots: !!opts.includeSnapshots });
@@ -1517,7 +1520,7 @@ function registerIpc() {
         const r = await runtime.provisioner.installAehd(
           (x) => send('provision:progress', { ...x, component: 'aehd' }),
         );
-        if (!fs.existsSync(bat)) throw new Error(r.error || 'AEHD 驱动包未就绪');
+        if (!fs.existsSync(bat)) throw new Error(r.error || 'Pacote de drivers AEHD não está pronto');
       }
 
       await new Promise((resolve, reject) => {
@@ -1528,7 +1531,7 @@ function registerIpc() {
           windowsHide: true,
         });
         proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(
-          code === 2 ? '已取消管理员授权（需要点「是」才能安装驱动）' : `驱动安装失败（退出码 ${code}）`,
+          code === 2 ? 'Autorização de administrador cancelada (é necessário confirmar "Sim" para instalar o driver)' : `Falha na instalação do driver (código de saída ${code})`,
         ))));
         proc.on('error', (e) => reject(e));
       });
@@ -1548,7 +1551,7 @@ function registerIpc() {
   ipcMain.handle('provision:enableVirtualization', async () => {
     try {
       const accel = await runtime.provisioner.emulatorAccel();
-      if (accel.ok) return { ok: true, already: true, accel, note: '硬件加速已可用，无需额外操作' };
+      if (accel.ok) return { ok: true, already: true, accel, note: 'Aceleração por hardware já disponível, nenhuma ação necessária' };
 
       const hv = await runtime.provisioner.hypervisor();
       if (hv.dll) {
@@ -1562,8 +1565,8 @@ function registerIpc() {
           restartNeeded: r.restart || r2.restart,
           accel: after,
           note: ok
-            ? (r.restart ? '已开启「虚拟机平台」，请重启电脑后获得最佳性能' : '「虚拟机平台」已开启，硬件加速即时生效')
-            : (r.error || r2.error || '无法开启系统虚拟化功能'),
+            ? (r.restart ? '"Plataforma de Máquina Virtual" ativada. Reinicie o computador para melhor desempenho' : '"Plataforma de Máquina Virtual" ativada, aceleração por hardware em vigor')
+            : (r.error || r2.error || 'Não foi possível ativar os recursos de virtualização do sistema'),
         };
       }
 
@@ -1571,7 +1574,7 @@ function registerIpc() {
       const ae = await runtime.provisioner.installAehd(
         (x) => send('provision:progress', { ...x, component: 'aehd' }),
       ).catch((e) => ({ ok: false, error: e.message }));
-      if (!ae.ok) return { ok: false, error: ae.error || 'AEHD 驱动包准备失败' };
+      if (!ae.ok) return { ok: false, error: ae.error || 'Falha na preparação do pacote de drivers AEHD' };
       const bat = path.join(runtime.provisioner.paths().aehdDir, 'silent_install.bat');
       await new Promise((resolve, reject) => {
         const { spawn: sp } = require('child_process');
@@ -1579,12 +1582,12 @@ function registerIpc() {
         const ps = `try { $p = Start-Process -FilePath '${esc}' -WorkingDirectory '${path.dirname(bat).replace(/'/g, "''")}' -Verb RunAs -Wait -PassThru; exit $p.ExitCode } catch { exit 2 }`;
         const proc = sp('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true });
         proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(
-          code === 2 ? '已取消管理员授权（需要点「是」才能安装驱动）' : `驱动安装失败（退出码 ${code}）`,
+          code === 2 ? 'Autorização de administrador cancelada (é necessário confirmar "Sim" para instalar o driver)' : `Falha na instalação do driver (código de saída ${code})`,
         ))));
         proc.on('error', (e) => reject(e));
       });
       const after = await runtime.provisioner.emulatorAccel();
-      return { ok: after.ok, accel: after, note: after.ok ? 'AEHD 硬件加速已启用' : after.note };
+      return { ok: after.ok, accel: after, note: after.ok ? 'Aceleração por hardware AEHD ativada com sucesso' : after.note };
     } catch (e) {
       return { ok: false, error: e.message };
     }
@@ -1810,7 +1813,7 @@ function registerIpc() {
         case 'animations': return { ok: true, ...(await androidSet.setAnimations(!!value)) };
         case 'fontScale': return { ok: true, ...(await androidSet.setFontScale(value)) };
         case 'density': return { ok: true, ...(await androidSet.setDensity(value)) };
-        default: return { ok: false, error: `未知设置项 ${key}` };
+        default: return { ok: false, error: `Opção desconhecida ${key}` };
       }
     } catch (e) { return { ok: false, error: e.message }; }
   });
@@ -2021,7 +2024,7 @@ if (!gotLock) {
         appLog(`LOW_DISK free=${freeMB}MB dir=${store.DATA_DIR}`);
         setTimeout(() => {
           notify('Pouco espaço em disco', `Restam apenas ${(freeMB / 1024).toFixed(1)} GB. Acesse Configurações → Integração com Windows para alterar o disco de dados ou limpe arquivos.`);
-          send('toast', { type: 'error', message: `磁盘只剩 ${(freeMB / 1024).toFixed(1)} GB，安卓可能无法启动（设置 → 系统集成 可换盘）` });
+          send('toast', { type: 'error', message: `Restam apenas ${(freeMB / 1024).toFixed(1)} GB no disco. O Android pode não iniciar (em Configurações → Integração com Windows você pode alterar a unidade)` });
         }, 3000).unref?.();
       }
     }

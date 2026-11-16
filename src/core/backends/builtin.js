@@ -19,11 +19,10 @@ const { Backend, CAPS } = require('./base');
 class BuiltinBackend extends Backend {
   static get id() { return 'builtin'; }
 
-  static get label() { return '自带运行时（Android Emulator + QEMU）'; }
+  static get label() { return 'Runtime Integrado (Android Emulator + QEMU)'; }
 
   static get summary() {
-    return '零第三方依赖：apkstart 自己下载并管理 Android 14 镜像，ARM 应用走镜像自带的翻译层。'
-      + '首次启动约 25 秒，之后靠 quickboot 快照秒进。';
+    return 'Zero dependências externas: o ApkStart gerencia a imagem do Android 14 com camada de tradução ARM. Primeira inicialização em ~25s, depois instantâneo via QuickBoot.';
   }
 
   static get embedCapable() { return true; }
@@ -51,28 +50,28 @@ class BuiltinBackend extends Backend {
   running() { return !!(this.rt && this.rt.emuRunning); }
 
   async probe() {
-    if (!this.rt) return { ok: false, found: false, detail: '运行时未初始化' };
+    if (!this.rt) return { ok: false, found: false, detail: 'Runtime não inicializado' };
     const p = this.rt.provisioner.paths();
     const found = fs.existsSync(p.emulatorExe) || fs.existsSync(p.adbExe);
     return { ok: true, found, path: p.emulatorExe, detail: p.root };
   }
 
   async check() {
-    if (!this.rt) return { ok: false, reason: '运行时未初始化' };
+    if (!this.rt) return { ok: false, reason: 'Runtime não inicializado' };
     const env = await this.rt.provisioner.checkEnv().catch(() => null);
-    if (!env) return { ok: false, reason: '运行时探测失败' };
-    if (!env.adb.ok) return { ok: false, reason: '缺 adb', needs: 'adb' };
-    if (!env.emulator.ok) return { ok: false, reason: '缺 Android Emulator', needs: 'emulator' };
-    if (!env.sysimg.ok) return { ok: false, reason: '缺系统镜像', needs: 'sysimg' };
+    if (!env) return { ok: false, reason: 'Falha na detecção do runtime' };
+    if (!env.adb.ok) return { ok: false, reason: 'adb ausente', needs: 'adb' };
+    if (!env.emulator.ok) return { ok: false, reason: 'Android Emulator ausente', needs: 'emulator' };
+    if (!env.sysimg.ok) return { ok: false, reason: 'Imagem de sistema ausente', needs: 'sysimg' };
     return { ok: true, env };
   }
 
   async resolveAdb() { return this.rt ? this.rt.adbPath() : ''; }
 
   async ensure({ onLog = () => {} } = {}) {
-    if (!this.rt) return { ok: false, error: '运行时未初始化' };
+    if (!this.rt) return { ok: false, error: 'Runtime não inicializado' };
     const r = await this.rt.ensure({ onLog });
-    if (!r || !r.ok) return { ok: false, error: (r && r.error) || '安卓运行时未能启动' };
+    if (!r || !r.ok) return { ok: false, error: (r && r.error) || 'O runtime Android não pôde ser iniciado' };
     // serial 用可写字段（见 syncSerial 的说明），ensure 成功后同步一次
     this.syncSerial();
     this.adbPath = this.rt.adbPath();
@@ -98,13 +97,13 @@ class BuiltinBackend extends Backend {
   }
 
   async stop({ graceful = true } = {}) {
-    if (!this.rt) return { ok: false, error: '运行时未初始化' };
+    if (!this.rt) return { ok: false, error: 'Runtime não inicializado' };
     const ok = await this.rt.stop({ graceful }).catch((e) => ({ error: e.message }));
     return { ok: ok !== false };
   }
 
   async install(component, onProgress = () => {}) {
-    if (!this.rt) return { ok: false, error: '运行时未初始化' };
+    if (!this.rt) return { ok: false, error: 'Runtime não inicializado' };
     const prov = this.rt.provisioner;
     switch (component) {
       case 'runtime': return prov.installRuntimePack(onProgress);

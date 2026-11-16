@@ -61,7 +61,7 @@ class Backend {
   static get id() { return 'base'; }
 
   /** 界面上显示的名字 */
-  static get label() { return '未命名后端'; }
+  static get label() { return 'Backend não nomeado'; }
 
   /** 一句话说明，设置页用它解释这个底座是什么 */
   static get summary() { return ''; }
@@ -145,7 +145,7 @@ class Backend {
 
   /** 下载/部署缺失组件（只有带 CAPS.provision 的底座需要实现） */
   // eslint-disable-next-line class-methods-use-this
-  async install(component, onProgress) { return { ok: false, error: '该后端不支持自动部署' }; }
+  async install(component, onProgress) { return { ok: false, error: 'Este backend não suporta implantação automática' }; }
 
   /** 占用统计（设置页「运行时占用」） */
   // eslint-disable-next-line class-methods-use-this
@@ -157,11 +157,11 @@ class Backend {
 
   /** 调整数据分区 */
   // eslint-disable-next-line class-methods-use-this
-  async resizeData(mb) { return { ok: false, error: '该后端不支持调整数据分区' }; }
+  async resizeData(mb) { return { ok: false, error: 'Este backend não suporta redimensionamento de partição' }; }
 
   /** 彻底重置安卓数据 */
   // eslint-disable-next-line class-methods-use-this
-  async resetData() { return { ok: false, error: '该后端不支持重置数据' }; }
+  async resetData() { return { ok: false, error: 'Este backend não suporta redefinição de dados' }; }
 
   /** 释放资源（ApkStart 退出时调用；默认什么都不做） */
   // eslint-disable-next-line class-methods-use-this

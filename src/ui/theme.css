@@ -430,23 +430,31 @@ html, body {
  * MODO ESCURO E BARRAS DE ROLAGEM VERDES (REFINADO)
  * ========================================================================== */
 
-/* Barras de rolagem globais em tonalidade verde esmeralda */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Barras de rolagem globais em verde vibrante, sólidas e perfeitamente visíveis */
+::-webkit-scrollbar,
+.content::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+::-webkit-scrollbar-track,
+.content::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track {
+  background: #111714 !important;
+  border-radius: 999px !important;
 }
-::-webkit-scrollbar-thumb {
-  background: rgba(18, 184, 134, .38);
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  transition: background .18s ease;
+::-webkit-scrollbar-thumb,
+.content::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
+  background: #12b886 !important;
+  border-radius: 999px !important;
+  border: 2px solid #111714 !important;
+  transition: background .15s ease, transform .15s ease;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(18, 184, 134, .75);
+::-webkit-scrollbar-thumb:hover,
+.content::-webkit-scrollbar-thumb:hover,
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #2ee6a6 !important;
 }
 
 .titlebar {
@@ -517,21 +525,25 @@ html, body {
   color: var(--text);
 }
 
-/* Scrollbar verde no tema escuro */
+/* Scrollbar verde vibrante no tema escuro */
 [data-theme="dark"] ::-webkit-scrollbar-track,
+[data-theme="dark"] .content::-webkit-scrollbar-track,
 [data-theme="dark"] .modal-body::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, .25);
+  background: #141c17 !important;
 }
 [data-theme="dark"] ::-webkit-scrollbar-thumb,
+[data-theme="dark"] .content::-webkit-scrollbar-thumb,
 [data-theme="dark"] .modal-body::-webkit-scrollbar-thumb {
-  background: rgba(46, 230, 166, .4) !important;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: #1bb780 !important;
+  border: 2px solid #141c17 !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 6px rgba(46, 230, 166, .45) !important;
 }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .content::-webkit-scrollbar-thumb:hover,
 [data-theme="dark"] .modal-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(46, 230, 166, .8) !important;
+  background: #2ee6a6 !important;
+  box-shadow: 0 0 10px rgba(46, 230, 166, .8) !important;
 }
 
 /* Título e logo no tema escuro - Nítido e com contraste */
@@ -761,36 +773,39 @@ input[type="range"] {
 }
 
 input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 999px;
-  background: #e2e8e4;
+  height: 8px !important;
+  border-radius: 999px !important;
+  background: #233128 !important;
+  border: 1px solid #2d4234 !important;
   transition: background .15s ease;
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #12b886;
-  box-shadow: 0 1px 4px rgba(18, 184, 134, .5);
-  margin-top: -5px;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: #2ee6a6 !important;
+  box-shadow: 0 0 10px rgba(46, 230, 166, .7) !important;
+  margin-top: -6px !important;
+  cursor: pointer;
   transition: transform .12s ease, background .12s ease;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  background: #2ee6a6;
+  transform: scale(1.2);
+  background: #39ffb6 !important;
 }
 
 [data-theme="dark"] input[type="range"]::-webkit-slider-runnable-track {
-  background: #26332b !important;
+  background: #1c2720 !important;
+  border-color: #2b3d32 !important;
 }
 
 [data-theme="dark"] input[type="range"]::-webkit-slider-thumb {
   background: #2ee6a6 !important;
-  box-shadow: 0 0 8px rgba(46, 230, 166, .6) !important;
+  box-shadow: 0 0 10px rgba(46, 230, 166, .8) !important;
 }
 
 /* Caixa de notas (.note) e descrições no modo escuro */

@@ -240,13 +240,13 @@ function planVariants(profile) {
   const safeGpu = gpus.find((g) => /software|swiftshader/.test(g)) || firstGpu;
   const ordered = [firstGpu, ...gpus.filter((g) => g !== firstGpu && /swiftshader|swangle/.test(g))].slice(0, 2);
   for (const gpu of ordered) {
-    out.push({ ...profile, gpu, label: `${gpu} / ${profile.accel === 'auto' ? '硬件加速' : '软件模拟'}`, wipe: false, snapshot: true });
+    out.push({ ...profile, gpu, label: `${gpu} / ${profile.accel === 'auto' ? 'Aceleração por hardware' : 'Emulação por software'}`, wipe: false, snapshot: true });
   }
   out.push({
     ...profile,
     gpu: safeGpu,
     accel: 'off',
-    label: '关闭加速的软件模拟（慢，但兼容性最好）',
+    label: 'Emulação por software sem aceleração (mais lenta, porém máxima compatibilidade)',
     wipe: false,
     snapshot: false,
   });
@@ -257,7 +257,7 @@ function planVariants(profile) {
     memoryMB: 2048,
     cores: 2,
     dataMB: Math.min(profile.dataMB, 2048),
-    label: '保守冷启动（最小内存 + 清快照）',
+    label: 'Inicialização a frio conservadora (memória mínima + limpar instantâneos)',
     // 这里**绝对不能** wipe：以前写的是 wipe:true，而磁盘写满时每次尝试都会失败，
     // 于是连续重试把用户已装的应用和存档一起「清快照 + 清数据」了 ——
     // 「磁盘满了，结果打开 ApkStart 应用全没了」就是这么发生的。
@@ -350,7 +350,7 @@ const RULES = [
     re: /emulator exit 3221225477|exit code 3221225477|0xC0000005|STATUS_ACCESS_VIOLATION/i,
     title: 'Falha no renderizador gráfico (Acesso inválido 0xC0000005)',
     hint: 'Alternado automaticamente para renderizador mais seguro para as próximas execuções.'
-      + '若反复出现，请更新显卡驱动；或在设置 → 性能与资源里把画质调低、关闭远程桌面/虚拟机显卡直通后再试。',
+      + 'Se persistir, atualize o driver de vídeo; ou em Configurações → Desempenho e Recursos reduza a resolução/desative aceleração de GPU remota.',
   },
   {
     code: 'GPU_INIT',
@@ -406,7 +406,7 @@ const RULES = [
     re: /No space left|disk full|not enough space|磁盘空间不足/i,
     title: 'Espaço em disco insuficiente para iniciar o Android',
     hint: 'Altere a Pasta de Dados do Runtime em Configurações → Integração com Windows para outro disco,'
-      + '或在设置里关掉「保留快速启动快照」/ 调小数据分区。安卓数据不会被自动清除。',
+      + 'ou nas Configurações desative "Manter instantâneo de inicialização rápida" / reduza o tamanho da partição de dados. Os dados do Android não serão apagados.',
   },
   {
     code: 'NON_ASCII',
@@ -464,24 +464,24 @@ function writeReport({ dataDir, profile, logLines = [], extra = {} }) {
   const file = path.join(dir, `diagnostic-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`);
   const d = diagnose(logLines);
   const body = [
-    'ApkStart 诊断报告',
-    `生成时间：${new Date().toLocaleString()}`,
+    'Relatório de Diagnóstico do ApkStart',
+    `Gerado em: ${new Date().toLocaleString()}`,
     '',
-    '== 本机 ==',
+    '== Máquina Local ==',
     JSON.stringify(hostInfo(), null, 2),
     '',
-    '== 自动配置 ==',
+    '== Configuração Automática ==',
     JSON.stringify(profile || {}, null, 2),
     describeProfile(profile || chooseProfile()),
     '',
-    '== 诊断 ==',
+    '== Diagnóstico ==',
     `${d.code}：${d.title}`,
     d.hint,
     '',
-    '== 附加信息 ==',
+    '== Informações Adicionais ==',
     JSON.stringify(extra, null, 2),
     '',
-    '== 运行时日志（末尾 300 行）==',
+    '== Logs do Runtime (últimas 300 linhas) ==',
     ...(Array.isArray(logLines) ? logLines.slice(-300) : String(logLines || '').split('\n')),
   ].join('\n');
   fs.writeFileSync(file, body, 'utf8');

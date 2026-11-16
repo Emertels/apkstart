@@ -5,7 +5,7 @@
 (function initTheme() {
   const saved = localStorage.getItem('apkstart_theme');
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const theme = saved || (prefersDark ? 'dark' : 'light');
+  const theme = saved || 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   if (window.apkstart && window.apkstart.setTheme) window.apkstart.setTheme(theme);
 
@@ -725,10 +725,18 @@ async function refreshAndroid() {
   $('setAndroidAnim').checked = !r.animationsOff;
   $('setAndroidVolume').value = r.volume;
   $('androidVolumeText').textContent = `${r.volume}%`;
+  updateVolumeSliderStyle(r.volume);
   if (r.fontScale) $('setAndroidFont').value = Number(r.fontScale).toFixed(2);
   if (r.density) {
     const opt = [...$('setAndroidDensity').options].find((o) => o.value === String(r.density));
     if (opt) $('setAndroidDensity').value = String(r.density);
+  }
+}
+
+function updateVolumeSliderStyle(val) {
+  const el = $('setAndroidVolume');
+  if (el) {
+    el.style.background = `linear-gradient(to right, #12b886 0%, #12b886 ${val}%, #233128 ${val}%, #233128 100%)`;
   }
 }
 
@@ -748,6 +756,7 @@ function bindAndroid() {
   $('setAndroidDensity').addEventListener('change', (e) => set('density', Number(e.target.value), 'Densidade de tela (DPI) ajustada'));
   $('setAndroidVolume').addEventListener('input', (e) => {
     $('androidVolumeText').textContent = `${e.target.value}%`;
+    updateVolumeSliderStyle(e.target.value);
     clearTimeout(volumeTimer);
     volumeTimer = setTimeout(() => set('volume', Number(e.target.value), 'Volume ajustado'), 260);
   });

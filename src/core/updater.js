@@ -125,7 +125,7 @@ class Updater {
    */
   async prepare(info) {
     const it = info || this.latest;
-    if (!it || !it.asset) throw new Error('这个版本没有可自动安装的安装包，请到 GitHub 发布页手动下载');
+    if (!it || !it.asset) throw new Error('Esta versão não possui um pacote para instalação automática. Baixe manualmente na página do GitHub');
     const dir = path.join(this.updateDir, it.version);
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, it.asset.name);
@@ -138,7 +138,7 @@ class Updater {
     if (it.asset.parts && it.asset.parts.length) {
       await this._downloadParts(it.asset, file, conns, total);
     } else {
-      this.onProgress({ stage: 'download', percent: 1, message: `正在下载 ${it.asset.name}…` });
+      this.onProgress({ stage: 'download', percent: 1, message: `Baixando ${it.asset.name}…` });
       // 候选地址 = 源站 + 镜像前缀；先各下 256KB 实测速度，再拿最快的那个分块下载。
       // 这是「GitHub 直连几十 KB/s、镜像能跑几 MB/s」时唯一靠谱的选路方式：
       // 按域名猜没用，同一天不同时段差别很大。
@@ -161,7 +161,7 @@ class Updater {
           this.onProgress({
             stage: 'download',
             percent: Math.max(1, Math.min(99, pct)),
-            message: `下载中 ${mb}${sp}`,
+            message: `Baixando ${mb}${sp}`, 
             speed: pr.speed,
           });
         },
@@ -173,10 +173,10 @@ class Updater {
       fs.rmSync(out, { recursive: true, force: true });
       fs.mkdirSync(out, { recursive: true });
       await this._extract(file, out);
-      this.onProgress({ stage: 'ready', percent: 100, message: '更新包已解压完成' });
+      this.onProgress({ stage: 'ready', percent: 100, message: 'Pacote de atualização descompactado com sucesso' });
       return { mode: 'zip', payload: out, version: it.version };
     }
-    this.onProgress({ stage: 'ready', percent: 100, message: '安装包已下载完成' });
+    this.onProgress({ stage: 'ready', percent: 100, message: 'Pacote de instalação baixado com sucesso' });
     return { mode: 'setup', payload: file, version: it.version };
   }
 
@@ -246,7 +246,7 @@ class Updater {
           this.onProgress({
             stage: 'extract',
             percent: Math.min(99, Math.round((i / names.length) * 100)),
-            message: `正在解压 ${i}/${names.length}`,
+            message: `Descompactando ${i}/${names.length}`,
           });
         }
       }
