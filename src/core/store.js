@@ -17,7 +17,10 @@ const DEFAULT_SETTINGS = {
   adbPath: '',
   device: '127.0.0.1:5555',
   engine: {
-    mode: 'builtin',         // builtin（自带运行时，默认） | attach（连接已有运行时，高级）
+    mode: 'builtin',         // builtin（自带运行时，默认） | mumu（复用已装的 MuMu 模拟器） | fydeos（FydeOS 自带安卓子系统） | attach（连接已有运行时，高级）
+    mumuPath: '',            // MuMu 安装目录（留空 = 自动按注册表 / 常见路径查找）
+    mumuIndex: 0,            // MuMu 多开实例索引，默认 0 号
+    fydeosHost: '',          // FydeOS 安卓子系统地址（留空 = 依次试 arc:5555 / 100.115.92.2:5555 / 127.0.0.1:5555）
     qemuPath: '',
     systemImage: '',
     memoryMB: 0,             // 0 = 由 doctor 按机器内存自动决定
@@ -77,7 +80,6 @@ const DEFAULT_SETTINGS = {
     emulatorUrl: '',         // 手动指定 emulator 包地址（空 = 自动从 SDK 索引解析最新版）
     sysimgUrl: '',           // 手动指定系统镜像包地址
     compatImage: false,      // ARM 兼容模式：改用 Google Play 镜像（内置 native bridge，可装 ARM-only 应用）
-    deployFailedAt: 0,       // 上次自动部署失败的时间戳（0=无失败）。失败后 30 分钟内不再自动重下
     // 轻量版的运行时整包：默认从本项目 GitHub Release 下载（与「软件更新」同源），
     // 拿不到时自动退回 dl.google.com 分组件下载。可在这里换成自建镜像地址。
     preferGithubRuntime: true,
@@ -121,6 +123,9 @@ const DEFAULT_SETTINGS = {
     // 横屏 = 把 AVD 物理面板换成 1280x720 并重启（唯一能得到正立+铺满的方式）。
     // 持久化在这里，重启 ApkStart 后仍按这个方向开机。
     landscape: false,
+    // 窗口模式：true=把安卓画面嵌进 ApkStart 自己的窗口（观感统一）；
+    // false=让模拟器开自己的原生窗口（绕开嵌入固有的黑边/坐标错位/铺不满问题）。
+    windowEmbed: true,
   },
 };
 

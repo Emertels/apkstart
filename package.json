@@ -1,19 +1,19 @@
 {
-  "name": "apkstart",
-  "productName": "ApkStart",
+  "name": "apkstart-ptbr",
+  "productName": "ApkStart PT-BR",
   "version": "0.4.4",
-  "description": "极致轻量的 Windows 安卓应用运行器：双击 APK 即装，应用以独立窗口与桌面图标运行",
+  "description": "Inicializador ultraleve de apps Android para Windows em Português do Brasil: instalação de APKs com dois cliques, atalhos na Área de Trabalho e janelas independentes",
   "main": "src/main.js",
-  "author": "RoutineMiku",
+  "author": "Emerson Teles",
   "license": "MIT",
   "private": true,
-  "homepage": "https://github.com/RoutineMiku/apkstart#readme",
+  "homepage": "https://github.com/Emertels/apkstart#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RoutineMiku/apkstart.git"
+    "url": "git+https://github.com/Emertels/apkstart.git"
   },
   "bugs": {
-    "url": "https://github.com/RoutineMiku/apkstart/issues"
+    "url": "https://github.com/Emertels/apkstart/issues"
   },
   "keywords": [
     "android",

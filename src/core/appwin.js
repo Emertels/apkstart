@@ -27,9 +27,12 @@ function iconUrl(p) {
 }
 
 class AppWindow {
-  constructor({ agent, setOrientation, mouseHook = false, pointerConfig = null }) {
+  constructor({ agent, setOrientation, mouseHook = false, pointerConfig = null, windowTargets = null }) {
     this.agent = agent;
     this.setOrientation = setOrientation || null;
+    // 画面窗口的候选句柄来源：自带底座为 null（由窗口代理自己找），
+    // 第三方底座（MuMu 等）传入一个返回 ["0x…"] 的函数，每次 embed 现取。
+    this.windowTargets = typeof windowTargets === 'function' ? windowTargets : null;
     // 全局鼠标钩子只在「应用窗口前台 + 至少一项映射开启」时安装。
     // pointerConfig 传函数：设置页改了开关，下一次 focus 就生效，不用重启。
     this.mouseHook = mouseHook;
@@ -67,6 +70,26 @@ class AppWindow {
     return { x: a.x, y: a.y, w: a.width, h: a.height };
   }
 
+  /**
+   * 模拟器原生窗口自己按设备面板锁宽高比，给错比例会被夹回去。
+   * 这里算出当前窗口应有的 w/h 比（含标题栏高度），用来一次给对的尺寸。
+   * 独立窗口模式下壳窗口是隐藏的、bounds 可能是竖屏默认值，
+   * 所以要按面板方向校正（横屏时宽 > 高，比值 > 1）。
+   */
+  _panelRatio() {
+    const b = this.win ? this.win.getBounds() : this._area();
+    if (b && b.width > 0 && b.height > 0) {
+      // 横屏面板下，壳窗口的 bounds 可能还是竖的（detached 模式 hide 了），
+      // 直接读会得到 0.56 (9:16)，但实际面板是 16:9。
+      // 此时用 portrait 的 h/w 作为宽（横屏 = 竖屏面板旋转 90°）
+      if (this.state.landscape && b.height > b.width) {
+        return b.height / b.width;
+      }
+      return b.width / b.height;
+    }
+    return 0.5625; // 竖屏 9:16 兜底
+  }
+
   _scale() {
     try {
       const b = this.win ? this.win.getBounds() : this._area();
@@ -78,10 +101,12 @@ class AppWindow {
 
   /**
    * 打开（或复用）应用窗口。
-   * @param {object} o { pkg, label, iconPath, portrait, fullscreen, onClosed }
+   * @param {object} o { pkg, label, iconPath, portrait, fullscreen, detached, onClosed }
+   *        detached=true 时走「独立窗口模式」：壳窗口只加载不显示，画面在模拟器原生窗口里
    */
   open(o) {
-    const { pkg, label, iconPath, portrait, fullscreen } = o;
+    const { pkg, label, iconPath, portrait, fullscreen, detached } = o;
+    this.detachedMode = !!detached;
     this._closedCb = o.onClosed || null;
     if (this.isOpen && this.pkg === pkg) {
       this.win.show();
@@ -92,6 +117,9 @@ class AppWindow {
 
     this.pkg = pkg;
     this.portrait = portrait || { w: 540, h: 960 };
+    // 独立窗口模式下「全屏」要作用在模拟器窗口上（我们这层壳是隐藏的，
+    // maximize 一个隐藏窗口没有任何视觉效果，openDetached 会读这个标记）。
+    this._wantFullscreen = !!fullscreen;
     this.state = { label: label || '应用', tip: '正在启动安卓运行时…', ready: false, landscape: false };
 
     const area = this._area();
@@ -134,6 +162,9 @@ class AppWindow {
       try { this.win.setTitle(label || 'ApkStart'); } catch (_) { /* 窗口可能已销毁 */ }
     });
     this.win.once('ready-to-show', () => {
+      // 独立窗口模式下，安卓画面在模拟器自己的原生窗口里，我们这层壳没有内容可显示，
+      // 留着只会多一个黑色空窗口。所以只加载、不显示（外壳仍存在，供状态/关闭逻辑用）。
+      if (this.detachedMode) return;
       this.win.show();
       this._push();
     });
@@ -231,6 +262,68 @@ class AppWindow {
    * netsimd 的控制台黑窗）继续压住 —— 关了反而会给它们再露一次脸的机会。
    * 模拟器窗口偶尔还没创建好（快照恢复太快的机器上），这里重试两次。
    */
+  /**
+   * 独立窗口模式：**不**把模拟器嵌进我们窗口，而是让它开自己的原生窗口。
+   *
+   * 为什么要有这条路：嵌入（SetParent）虽然观感统一，但会带来一整串麻烦 ——
+   * 前后台 Z 序、黑边、坐标映射错位、最大化后不铺满、Qt 面板方向与宿主比例打架。
+   * 这些都是「把一个别人的窗口塞进自己窗口」固有的代价。
+   *
+   * 独立窗口下，模拟器窗口是系统原生窗口：方向、缩放、输入全由它自己管，
+   * 上面那一整类问题从根上不存在。代价是多一个任务栏图标、观感不完全统一。
+   *
+   * @returns {Promise<boolean>} 是否成功切到独立窗口
+   */
+  async openDetached() {
+    if (!this.isOpen) return false;
+    // 壳窗口在独立模式下绝不能露脸（它没有内容，只会是一块黑）
+    try { this.win.hide(); } catch (_) { /* ignore */ }
+    // 先确保它没被嵌在里面（从嵌入切过来时 _emu 的父窗口还是宿主）。
+    // keep=true：告诉代理这是「切独立窗口」，不是「结束嵌入」——否则它会把
+    // 用户正在看的模拟器窗口当成杂物藏掉。
+    const dt = await this.agent.detach(true).catch((e) => ({ ok: false, error: e.message }));
+    this._detachedDebug = `detach=${JSON.stringify(dt)}`;
+    await sleep(600);
+    // 让模拟器窗口真的可见
+    const shown = await this.agent.show().catch((e) => ({ ok: false, error: e.message }));
+    this._detachedDebug += ` show=${JSON.stringify(shown)}`;
+    if (!shown || shown.ok === false) { this.lastEmbedError = this._detachedDebug; return false; }
+    await sleep(300);
+    // 按屏幕可用区居中和 sizing。
+    // 注意：模拟器原生窗口自己按设备面板比例锁宽高比（竖屏 9:16），
+    // 给一个不匹配的 w/h，它会把宽夹回高度对应的值，结果就是「设了 1280 宽
+    // 却只有 400 宽」。所以这里主动按面板比例算尺寸，一次给对。
+    //
+    // 全屏（「启动时自动全屏」）时铺满整个可用区；横屏面板下宽高比本来就贴合
+    // 屏幕，铺满不会留黑边 —— 这也是横屏比竖屏更值得用全屏的原因。
+    const area = this._area();
+    const ratio = this._panelRatio();
+    let w;
+    let h;
+    let x;
+    let y;
+    if (this._wantFullscreen) {
+      w = area.w;
+      h = area.h;
+      x = area.x;
+      y = area.y;
+    } else {
+      const maxH = Math.min(area.h - 140, 1000);
+      const maxW = Math.min(area.w - 80, 1280);
+      w = maxW;
+      h = Math.round(w / ratio);
+      if (h > maxH) { h = maxH; w = Math.round(h * ratio); }
+      x = Math.round(area.x + (area.w - w) / 2);
+      y = Math.round(area.y + 60);
+    }
+    const lay = await this.agent.layout({ x, y, w, h })
+      .catch((e) => ({ ok: false, error: e.message }));
+    this._detachedDebug += ` layout=${JSON.stringify(lay)}`;
+    this.lastEmbedError = this._detachedDebug;
+    this.lastEmbedOk = false;
+    return !!(lay && lay.ok !== false);
+  }
+
   async embed() {
     if (!this.isOpen) return false;
     let last = null;
@@ -238,10 +331,22 @@ class AppWindow {
       if (!this.isOpen) return false;
       const hwnd = this._hwnd();
       if (!hwnd) return false;
+      // 第三方底座（MuMu 等）由外部提供候选句柄；拿不到就等一下再试
+      // —— 句柄是每次开机重新分配的，缓存一份旧的会把窗口嵌错地方。
+      let targets = null;
+      if (typeof this.windowTargets === 'function') {
+        // eslint-disable-next-line no-await-in-loop
+        targets = await Promise.resolve(this.windowTargets()).catch(() => null);
+        if (Array.isArray(targets) && !targets.length) {
+          // eslint-disable-next-line no-await-in-loop
+          await sleep(attempt < 2 ? 400 : 1000);
+          continue;
+        }
+      }
       // eslint-disable-next-line no-await-in-loop
-      const r = await this.agent.embed(hwnd, this._rect()).catch((e) => ({ ok: false, error: e.message }));
+      const r = await this.agent.embed(hwnd, this._rect(), targets).catch((e) => ({ ok: false, error: e.message }));
       last = r;
-      if (r && r.ok) return true;
+      if (r && r.ok) { this.lastEmbedOk = true; return true; }
       // eslint-disable-next-line no-await-in-loop
       await sleep(attempt < 2 ? 300 : 800);
     }
@@ -253,8 +358,7 @@ class AppWindow {
 
   async fitNow() {
     if (!this.isOpen) return;
-    await this.agent.fit(this._rect()).catch(() => {});
-  }
+    await this.agent.fit(this._rect()).catch(() => {});  }
 
   /** 模拟器子窗口应该占据的矩形（物理像素，已把 8px 内边距推出可视区） */
   _rect() {
@@ -366,6 +470,7 @@ class AppWindow {
     const win = this.win;
     const pkg = this.pkg;
     this._syncHook(false);
+    this.lastEmbedOk = false;
     if (!keepApp && pkg && this._onCloseApp) this._onCloseApp(pkg);
     this._selfClose = true;
     this.win = null;

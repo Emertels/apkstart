@@ -197,6 +197,29 @@ class EmulatorEngine {
    * 下一次启动就会 FATAL "Running multiple emulators with the same AVD"。
    * 按「AVD 锁里的 pid」+「命令行带本 AVD 名的 qemu/emulator」两个来源清。
    */
+  /**
+   * 当前 AVD 面板是横的还是竖的。
+   *
+   * 为什么要问这个：横屏**只能靠物理面板**实现 —— `wm size` 只改逻辑分辨率，画面会
+   * 躺倒 90°；`adb emu rotate` 只转内容，系统里还是竖屏。真正生效的是
+   * `hw.lcd.width/height` 互换 + 重启。而 config.ini 是每次开机时按当时的设置写的，
+   * 所以读它就知道**现在跑着的这台**是什么方向。
+   *
+   * @returns {boolean|null} true=横屏面板，false=竖屏面板，null=读不到
+   */
+  panelLandscape() {
+    try {
+      const avdDir = path.join(this.provisioner.paths().avdHome, `${AVD_NAME}.avd`);
+      const cfg = fs.readFileSync(path.join(avdDir, 'config.ini'), 'utf8');
+      const w = Number((/^hw\.lcd\.width=(\d+)$/m.exec(cfg) || [])[1]);
+      const h = Number((/^hw\.lcd\.height=(\d+)$/m.exec(cfg) || [])[1]);
+      if (!w || !h) return null;
+      return w > h;
+    } catch (_) {
+      return null;
+    }
+  }
+
   async killOrphanProcesses({ onLog = () => {} } = {}) {
     if (process.platform !== 'win32') return 0;
     const avdDir = path.join(this.provisioner.paths().avdHome, `${AVD_NAME}.avd`);
@@ -360,6 +383,13 @@ class EmulatorEngine {
       'hw.gpu.enabled=yes',
       `hw.gpu.mode=${gpu}`,
       'hw.keyboard=yes',
+      // 虚拟 Wi-Fi 必须显式打开。API 34 的 Play Store 镜像上网走的是
+      // wlan0（netsim 虚拟网卡），不是早期的 eth0。config.ini 里少了这一行，
+      // 模拟器就不会给 wlan0 建链路——表现是 wlan0 一直 NO-CARRIER、
+      // `dumpsys connectivity` 显示 Active default network: none，应用里就是
+      // 一直「网络错误，请稍后再试」。命令行的 -netdelay/-netspeed/-dns-server
+      // 都只是 QEMU 用户态 NAT 的参数，跟 guest 内部的网卡有没有被拉起来无关。
+      'hw.wifi=yes',
       'hw.lcd.width=' + screen.w,
       'hw.lcd.height=' + screen.h,
       'hw.lcd.density=' + screen.dpi,
@@ -804,7 +834,8 @@ class EmulatorEngine {
   async checkNetwork(adbPath = '', { waitMs = 0, interval = 3000 } = {}) {
     const fs = require('fs');
     const path = require('path');
-    let adb = adbPath || '';
+    // 同 repairWifi：防住「把函数当路径传进来」这种调用错误
+    let adb = typeof adbPath === 'function' ? adbPath() : (adbPath || '');
     if (!adb) {
       try { adb = this.provisioner.adbVersionPath() || ''; } catch (_) { adb = ''; }
     }
@@ -856,6 +887,95 @@ class EmulatorEngine {
     const ip = ips[0];
     const gw = /^10\.0\.2\./.test(ip) ? '10.0.2.2' : ip.replace(/\.\d+$/, '.1');
     return { ok: true, reason: '', gateway: gw, ip, wifiConnected: connected };
+  }
+
+  /**
+   * 把「已保存但不会自动连」的 AndroidWifi 主动连上。
+   *
+   * 这是实机踩出来的：模拟器自带的虚拟热点 AndroidWifi 在配置库里可能落成
+   * 两条记录（open + owe），系统据此判定为
+   *   「Saved / Won't automatically connect」
+   * 于是开机后 wlan0 永远 NO-CARRIER，应用里一直报网络错误。
+   *
+   * 麻烦的是 shell（uid 2000）没有 NETWORK_SETTINGS 权限，
+   * `cmd wifi connect-network` 会直接抛 SecurityException，所以不能走命令行。
+   * 这里改为拉起 Wi-Fi 设置页、点一下那条已保存的网络——和用户手动点的效果一样。
+   *
+   * @returns {Promise<boolean>} 是否已连上
+   */
+  async repairWifi(adbPath = '') {
+    const fs = require('fs');
+    const path = require('path');
+    // 防御：调用方可能误把函数本身传进来（rt.adbPath 是个方法）。
+    let adb = typeof adbPath === 'function' ? adbPath() : (adbPath || '');
+    if (!adb) {
+      try { adb = path.join(this.locate().root, 'platform-tools', 'adb.exe'); } catch (_) { adb = ''; }
+    }
+    if (!adb || !fs.existsSync(adb)) adb = 'adb';
+    const port = Number(process.env.ANDROID_ADB_SERVER_PORT) || this.adbPort || 5044;
+    const env = { ...process.env, ANDROID_ADB_SERVER_PORT: String(port) };
+    const sh = (cmd, timeout = 10000) => new Promise((resolve) => {
+      try {
+        execFile(adb, ['-s', this.serial, 'shell', cmd], { timeout, windowsHide: true, env }, (e, out) => {
+          resolve(e ? '' : String(out || ''));
+        });
+      } catch (_) { resolve(''); }
+    });
+    // 连上之后顺手把「联网验证」的探测地址换成国内可达的。
+    // 安卓默认拿 connectifitycheck.gstatic.com 判断「是否真能上网」，国内连不上它，
+    // 系统就一直给网络打「!」标记（已连接但无法访问互联网）。部分应用会因此
+    // 自我判定为离线、拒绝加载内容。换成一个返回 204 的国内端点即可。
+    const tune = async () => {
+      await sh('settings put global captive_portal_http_url http://connect.rom.miui.com/generate_204');
+      await sh('settings put global captive_portal_https_url https://connect.rom.miui.com/generate_204');
+      await sh('settings put global captive_portal_mode 0');
+    };
+    // 已经连上就别折腾了
+    if (/Wifi is connected/i.test(await sh('cmd wifi status'))) {
+      await tune();
+      return true;
+    }
+    // 开关被关掉时（用户手滑 / 之前 -svc wifi disable）先打开
+    await sh('svc wifi enable');
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // 打开 Wi-Fi 设置页，用 uiautomator 找到 AndroidWifi 那一行再点它。
+    // 比按坐标点稳：不同分辨率 / 语言下坐标都不一样。
+    await sh('am start -a android.settings.WIFI_SETTINGS');
+    await new Promise((r) => setTimeout(r, 2500));
+    await sh('uiautomator dump /sdcard/ui.xml');
+    const xml = await new Promise((resolve) => {
+      try {
+        execFile(adb, ['-s', this.serial, 'shell', 'cat', '/sdcard/ui.xml'],
+          { timeout: 10000, windowsHide: true, env, maxBuffer: 8 * 1024 * 1024 },
+          (e, out) => resolve(e ? '' : String(out || '')));
+      } catch (_) { resolve(''); }
+    });
+    // 节点形如 <node text="AndroidWifi" ... bounds="[x1,y1][x2,y2]" />
+    const re = /<node[^>]*\btext="([^"]*)"[^>]*\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g;
+    let m = re.exec(xml);
+    while (m) {
+      const label = m[1];
+      if (/AndroidWifi/i.test(label)) {
+        const cx = Math.round((Number(m[2]) + Number(m[4])) / 2);
+        const cy = Math.round((Number(m[3]) + Number(m[5])) / 2);
+        await sh(`input tap ${cx} ${cy}`);
+        await new Promise((r) => setTimeout(r, 6000));
+        if (/Wifi is connected/i.test(await sh('cmd wifi status'))) {
+          await tune();
+          return true;
+        }
+      }
+      m = re.exec(xml);
+    }
+    // 兜底：直接重连一次看看（有些版本 dump 里没有 text，只有 content-desc）
+    await sh('svc wifi disable');
+    await new Promise((r) => setTimeout(r, 1500));
+    await sh('svc wifi enable');
+    await new Promise((r) => setTimeout(r, 6000));
+    const ok = /Wifi is connected/i.test(await sh('cmd wifi status'));
+    if (ok) await tune();
+    return ok;
   }
 
   /**

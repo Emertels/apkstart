@@ -60,21 +60,6 @@ function sha256File(file) {
 }
 
 /**
- * 丢弃一次失败下载留下的所有残余（半截文件 + 分块边车）。
- *
- * 「一直重复下载」的根因：以前所有失败路径都只抛异常、不删文件，于是 tmp 里
- * 永远躺着一个半截 zip + .chunks.json。下次进来看到已有文件就带 Range 续传，
- * 一旦服务器/源给的总大小或分块方式和上次不一致，拼不出正确字节 → 又失败 →
- * 又留半截……每次打开都在重下同一个包。断点续传本身没错，但必须限定在「确认
- * 能续」的场景；一旦这次判定失败就整包作废，下次干净重来。
- */
-function discardPartial(dest) {
-  for (const p of [dest, `${dest}.chunks.json`, `${dest}.part`]) {
-    try { fs.rmSync(p, { force: true }); } catch (_) { /* 被占用就算了 */ }
-  }
-}
-
-/**
  * 下载到本地文件（自动续传）。
  * @param {string} url
  * @param {string} dest
@@ -85,7 +70,6 @@ async function download(url, dest, opt = {}) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
 
   let attempt = 0;
-  try {
   for (;;) {
     attempt++;
     const existing = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
@@ -103,7 +87,6 @@ async function download(url, dest, opt = {}) {
     if (res.statusCode !== 200 && res.statusCode !== 206) {
       res.resume();
       if (attempt <= retries) { await new Promise((r) => setTimeout(r, 1500)); continue; }
-      discardPartial(dest);   // 重试耗尽：别把坏文件留给下次续传
       throw new Error(`下载失败 HTTP ${res.statusCode}: ${url}`);
     }
 
@@ -116,66 +99,61 @@ async function download(url, dest, opt = {}) {
       fs.rmSync(dest, { force: true });
     }
 
-    try {
-      await new Promise((resolve, reject) => {
-        const startSize = res.statusCode === 206 ? existing : 0;
-        let got = startSize;
-        let lastTick = Date.now();
-        let lastBytes = got;
-        const ws = fs.createWriteStream(dest, { flags: startSize > 0 ? 'a' : 'w' });
+    await new Promise((resolve, reject) => {
+      const startSize = res.statusCode === 206 ? existing : 0;
+      let got = startSize;
+      let lastTick = Date.now();
+      let lastBytes = got;
+      const ws = fs.createWriteStream(dest, { flags: startSize > 0 ? 'a' : 'w' });
 
-        // 和分块下载一样：必须保证 promise 一定会 settle。
-        // 连接静默（被墙/被限速）时 res 既不 end 也不 error，pipe 永远不 finish，
-        // 整个下载就卡死在这里，用户看到的是进度条不动、也没有报错。
-        const idleMs = Number(opt.idleMs) > 0 ? Number(opt.idleMs) : 30000;
-        let settled = false;
-        let idle = null;
-        const finish = (err) => {
-          if (settled) return;
-          settled = true;
-          if (idle) clearTimeout(idle);
-          try { ws.destroy(); } catch (_) { /* ignore */ }
-          if (err) reject(err); else resolve();
-        };
-        const kick = () => {
-          if (settled) return;
-          if (idle) clearTimeout(idle);
-          idle = setTimeout(() => {
-            res.destroy();
-            finish(new Error('连接停滞（长时间无数据）'));
-          }, idleMs);
-        };
+      // 和分块下载一样：必须保证 promise 一定会 settle。
+      // 连接静默（被墙/被限速）时 res 既不 end 也不 error，pipe 永远不 finish，
+      // 整个下载就卡死在这里，用户看到的是进度条不动、也没有报错。
+      const idleMs = Number(opt.idleMs) > 0 ? Number(opt.idleMs) : 30000;
+      let settled = false;
+      let idle = null;
+      const finish = (err) => {
+        if (settled) return;
+        settled = true;
+        if (idle) clearTimeout(idle);
+        try { ws.destroy(); } catch (_) { /* ignore */ }
+        if (err) reject(err); else resolve();
+      };
+      const kick = () => {
+        if (settled) return;
+        if (idle) clearTimeout(idle);
+        idle = setTimeout(() => {
+          res.destroy();
+          finish(new Error('连接停滞（长时间无数据）'));
+        }, idleMs);
+      };
+      kick();
+
+      const onAbort = () => { res.destroy(new Error('已取消')); };
+      if (signal) signal.addEventListener('abort', onAbort, { once: true });
+
+      res.on('data', (c) => {
+        got += c.length;
         kick();
-
-        const onAbort = () => { res.destroy(new Error('已取消')); };
-        if (signal) signal.addEventListener('abort', onAbort, { once: true });
-
-        res.on('data', (c) => {
-          got += c.length;
-          kick();
-          const now = Date.now();
-          if (now - lastTick > 400) {
-            const speed = (got - lastBytes) / ((now - lastTick) / 1000);
-            lastTick = now;
-            lastBytes = got;
-            onProgress({
-              got, total,
-              percent: total ? Math.min(100, (got / total) * 100) : 0,
-              speed,
-              eta: total && speed > 0 ? Math.max(0, (total - got) / speed) : null,
-            });
-          }
-        });
-        res.pipe(ws);
-        ws.on('finish', () => finish());
-        ws.on('error', (e) => finish(e));
-        res.on('error', (e) => finish(e));
-        res.on('close', () => { if (!res.complete) finish(new Error('连接被中断')); });
+        const now = Date.now();
+        if (now - lastTick > 400) {
+          const speed = (got - lastBytes) / ((now - lastTick) / 1000);
+          lastTick = now;
+          lastBytes = got;
+          onProgress({
+            got, total,
+            percent: total ? Math.min(100, (got / total) * 100) : 0,
+            speed,
+            eta: total && speed > 0 ? Math.max(0, (total - got) / speed) : null,
+          });
+        }
       });
-    } catch (e) {
-      discardPartial(dest);   // 中断 / 超时 / 写盘失败：半截文件留着只会让下次续传继续失败
-      throw e;
-    }
+      res.pipe(ws);
+      ws.on('finish', () => finish());
+      ws.on('error', (e) => finish(e));
+      res.on('error', (e) => finish(e));
+      res.on('close', () => { if (!res.complete) finish(new Error('连接被中断')); });
+    });
 
     break;
   }
@@ -187,17 +165,11 @@ async function download(url, dest, opt = {}) {
   if (expectSha256) {
     const actual = await sha256File(dest);
     if (actual.toLowerCase() !== expectSha256.toLowerCase()) {
-      discardPartial(dest);
+      fs.rmSync(dest, { force: true });
       throw new Error(`校验失败：期望 ${expectSha256.slice(0, 12)}… 实际 ${actual.slice(0, 12)}…`);
     }
   }
   return { file: dest, size: fs.statSync(dest).size };
-  } catch (e) {
-    // openStream 直接 reject（连接被拒 / DNS 失败 / 超时）不会进入写流那段
-    // try/catch —— 统一在最外层兜住：任何抛出都先丢弃残余。
-    discardPartial(dest);
-    throw e;
-  }
 }
 
 /**
@@ -327,18 +299,14 @@ async function downloadParallel(url, dest, opt = {}) {
       }
     }));
   } catch (e) {
-    try { fs.closeSync(fd); } catch (_) { /* ignore */ }
-    discardPartial(dest);   // 整包作废，别留半截文件给下次续传
+    fs.closeSync(fd);
     throw e;
   }
   fs.closeSync(fd);
 
   const size = fs.statSync(dest).size;
   onProgress({ got: size, total: size, percent: 100, speed: 0, eta: 0 });
-  if (size !== total) {
-    discardPartial(dest);
-    throw new Error(`下载不完整：${size}/${total} 字节`);
-  }
+  if (size !== total) throw new Error(`下载不完整：${size}/${total} 字节`);
   return { file: dest, size, parallel: n };
 }
 
@@ -346,14 +314,12 @@ async function downloadParallel(url, dest, opt = {}) {
 async function downloadAny(urls, dest, opt = {}) {
   const errors = [];
   for (const u of urls) {
-    discardPartial(dest);   // 换源前清掉上一个源的半截文件（跨源字节不可混用）
     try {
       // eslint-disable-next-line no-await-in-loop
       const r = await download(u, dest, opt);
       return { ...r, url: u };
     } catch (e) {
       errors.push(`${u} → ${e.message}`);
-      discardPartial(dest);
     }
   }
   throw new Error(`所有下载源均失败：\n${errors.join('\n')}`);
@@ -557,10 +523,8 @@ async function downloadMulti(urls, dest, opt = {}) {
         } catch (e) {
           c.tries += 1;
           if (c.tries >= retries) {
-            // 重试耗尽：这份文件里已经混进了「从不同源拉来的块」，再续传也
-            // 拼不出正确字节。整包 + 边车一起作废，下次干净重来。
-            // 以前这里只 saveMeta() 保留，结果每次打开都从坏块继续 → 无限重下。
-            discardPartial(dest);
+            // 记下已完成的部分（边车），下次从缺的块继续，而不是从头再下 1.4GB
+            saveMeta();
             throw new Error(`分块失败（${c.start}-${c.end}）：${e.message}`);
           }
           // 换一个源再试：一个镜像抽风不该拖垮整个下载
@@ -571,8 +535,7 @@ async function downloadMulti(urls, dest, opt = {}) {
       }
     }));
   } catch (e) {
-    try { fs.closeSync(fd); } catch (_) { /* ignore */ }
-    discardPartial(dest);
+    fs.closeSync(fd);
     throw e;
   }
   fs.closeSync(fd);
@@ -580,10 +543,7 @@ async function downloadMulti(urls, dest, opt = {}) {
 
   const size = fs.statSync(dest).size;
   tick(true);
-  if (size !== total) {
-    discardPartial(dest);
-    throw new Error(`下载不完整：${size}/${total} 字节`);
-  }
+  if (size !== total) throw new Error(`下载不完整：${size}/${total} 字节`);
   return { file: dest, size, parallel: n, sources: same.length, multi: true, resumed: resume };
 }
 
@@ -591,20 +551,17 @@ async function downloadMulti(urls, dest, opt = {}) {
 async function downloadAnyParallel(urls, dest, opt = {}) {
   const errors = [];
   for (const u of urls) {
-    discardPartial(dest);   // 换源前清掉上一个源的半截文件
     try {
       // eslint-disable-next-line no-await-in-loop
       const r = await downloadParallel(u, dest, opt);
       return { ...r, url: u };
     } catch (e) {
       errors.push(`${u} → ${e.message}`);
-      discardPartial(dest);
     }
   }
   throw new Error(`所有下载源均失败：\n${errors.join('\n')}`);
 }
 
 module.exports = {
-  download, downloadAny, downloadParallel, downloadAnyParallel, downloadMulti,
-  head, sha256File, openStream, discardPartial,
+  download, downloadAny, downloadParallel, downloadAnyParallel, downloadMulti, head, sha256File, openStream,
 };

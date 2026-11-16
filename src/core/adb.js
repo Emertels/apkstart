@@ -825,12 +825,23 @@ class AdbClient {
    */
   async setOrientation(landscape) {
     try {
-      // 自动旋转必须关掉（否则传感器会乱转），但 user_rotation 要按目标方向锁：
-      // 物理面板换成 1280x720 之后，只有把 user-rotation 锁成 1（90°），
-      // Android 才会按横屏方向排版 —— 否则它仍按 rotation 0 渲染竖内容，
-      // Qt 贴进横窗口就变成「躺倒 90°」。
+      // 自动旋转必须关掉（否则传感器会乱转）。
       await this.shell('settings put system accelerometer_rotation 0; wm size reset', { timeout: 15000 });
-      await this.shell(`wm user-rotation lock ${landscape ? 1 : 0}`, { timeout: 15000 });
+      // 方向锁 **0**（不是 1）。物理面板的方向已经由 hw.lcd.width/height 决定
+      // （见 doctor.lcdFor），这里再锁 1 等于把横面板又转成竖逻辑空间，
+      // 结果就是画面躺倒 90° —— 这正是「横屏没弄好」的直接原因。
+      await this.shell('wm user-rotation lock 0', { timeout: 15000 });
+      // 关键一步：红果这类应用自己声明了 portrait，系统会照办，于是
+      // init=1280x720 的横面板被转成 cur=720x1280 的竖逻辑空间，画面又躺下。
+      // 打开「忽略应用的屏幕方向请求」，系统才会按面板方向排版。
+      // 竖屏模式下必须显式关掉，否则上一次横屏留下的 true 会让竖屏面板里
+      // 显示横屏排版。API < 31 没有这个命令，失败忽略即可。
+      await this.shell(`wm set-ignore-orientation-request ${landscape ? 'true' : 'false'}`, { timeout: 15000 });
+      // 打开 freeform / 忽略方向请求后，安卓会弹一次「See and do more」的引导框
+      // （"Double-tap outside an app to reposition it…"）。它盖在应用上面，
+      // 用户以为程序坏了。这里预先把它标记为已确认，再兜底按一次返回。
+      await this.shell('settings put secure freeform_mode_confirmations confirmed', { timeout: 10000 });
+      if (landscape) await this.shell('input keyevent KEYCODE_BACK', { timeout: 8000 });
       await this.shell(landscape ? 'wm density 190' : 'wm density reset', { timeout: 15000 });
       return true;
     } catch (_) {
@@ -843,7 +854,9 @@ class AdbClient {
     try {
       await this.shell('wm size reset; wm density reset', { timeout: 15000 });
       await this.shell('settings put system accelerometer_rotation 0', { timeout: 15000 });
-      await this.shell(`wm user-rotation lock ${landscape ? 1 : 0}`, { timeout: 15000 });
+      // 与 setOrientation 保持一致：面板方向说了算，逻辑方向锁 0。
+      await this.shell('wm user-rotation lock 0', { timeout: 15000 });
+      await this.shell(`wm set-ignore-orientation-request ${landscape ? 'true' : 'false'}`, { timeout: 15000 });
       return true;
     } catch (_) {
       return false;

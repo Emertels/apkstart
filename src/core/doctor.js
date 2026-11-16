@@ -141,13 +141,6 @@ function chooseProfile({
   const accelOk = !!(accel && accel.ok);
   // 3GB 足够 Android 14 与主流应用；再高只会放大内存占用和 quickboot 快照体积
   let memoryMB = clamp(Math.floor((host.totalMB * 0.22) / 256) * 256, 2048, 3072);
-  // 「省资源」模式：刷视频/看小说这类轻负载用不到 3G，把上限压到 2G。
-  // 直接效果是 qemu 常驻内存少约 1GB、quickboot 快照也小 1GB（磁盘同步受益）。
-  // 只有用户没手动指定内存时才收敛，手动值永远优先。
-  const rmode = settings && settings.engine && settings.engine.resourceMode;
-  if (rmode === 'save' && !overrides.memoryMB) {
-    memoryMB = clamp(memoryMB, 2048, 2048);
-  }
   // 物理可用内存不够时下调；Android 14 最低 2G，低于此只能靠 TCG 慢速跑
   if (host.freeMB && host.freeMB < memoryMB + 1024) {
     memoryMB = Math.max(2048, Math.floor((host.freeMB * 0.5) / 256) * 256);
@@ -355,92 +348,92 @@ const RULES = [
     // 与 CPU、内存、镜像都无关（同机换 -gpu software 往往就能过）。
     // 必须排在 GPU_INIT 前面：崩溃日志里通常也带着渲染初始化信息，先判崩溃更准。
     re: /emulator exit 3221225477|exit code 3221225477|0xC0000005|STATUS_ACCESS_VIOLATION/i,
-    title: '渲染后端崩溃（0xC0000005 访问冲突）',
-    hint: '已自动改用更保守的渲染后端重试，并记住这个后端下次不再先试。'
+    title: 'Falha no renderizador gráfico (Acesso inválido 0xC0000005)',
+    hint: 'Alternado automaticamente para renderizador mais seguro para as próximas execuções.'
       + '若反复出现，请更新显卡驱动；或在设置 → 性能与资源里把画质调低、关闭远程桌面/虚拟机显卡直通后再试。',
   },
   {
     code: 'GPU_INIT',
     // 只匹配「失败」语境：正常日志里也会出现 Vulkan/EGL/ANGLE 字样，不能误判为致命错误
     re: /Failed to initialize GL emulation|Could not initialize (OpenGL|emulated framebuffer)|Failed to create .*GLES|EGL_(BAD|NOT_INITIALIZED|CONTEXT_LOST)|Failed to (load|initialize) .*vulkan|vulkan.*(failed|error)|ANGLE.*(fail|error)/i,
-    title: '显卡渲染后端初始化失败',
-    hint: '已自动切换软件渲染重试。若仍失败，请更新显卡驱动，或关闭远程桌面/虚拟机显卡直通后再试。',
+    title: 'Falha ao inicializar renderizador da GPU',
+    hint: 'Alternado para renderização por software. Atualize os drivers da GPU se persistir.',
   },
   {
     code: 'GPU_MODE',
     re: /Unknown option|invalid .*-gpu|Unrecognized .*gpu|Unsupported gpu/i,
-    title: '当前运行时不接受该 GPU 模式',
-    hint: '已自动按运行时版本挑选可用的 GPU 模式重试（老版本用 swiftshader_indirect，新版本用 software）。',
+    title: 'Modo de GPU incompatível com este runtime',
+    hint: 'Modo de GPU compatível selecionado automaticamente.',
   },
   {
     code: 'ACCEL',
     re: /x86_64 emulation currently requires hardware acceleration|acceleration.*not (installed|available|supported)|WHPX.*(not|failed)|AEHD.*(not|failed)|ERROR_ACCESS_DENIED|加速.*不可用/i,
-    title: '硬件加速不可用',
-    hint: '已自动回退软件模拟（首次启动会明显变慢）。想要流畅可用，请在「Windows 功能」勾选「虚拟机平台」，或安装 AEHD 驱动后重启。',
+    title: 'Aceleração por hardware indisponível',
+    hint: 'Alternado para emulação por software. Para máximo desempenho, ative a Plataforma de Máquina Virtual no Windows.',
   },
   {
     code: 'MEMORY',
     re: /Cannot allocate memory|not enough memory|commit charge|Failed to allocate|out of memory|内存不足/i,
-    title: '内存分配失败',
-    hint: '已自动下调分配给 Android 的内存与核心数。请关闭占内存的程序后重试。',
+    title: 'Falha de alocação de memória',
+    hint: 'Memória e núcleos reduzidos automaticamente. Feche programas pesados do Windows.',
   },
   {
     code: 'PORT_BUSY',
     re: /port.*(in use|busy)|Address already in use|bind.*failed|Failed to (setup|bind) .*console/i,
-    title: '模拟器端口被占用',
-    hint: '已自动换用空闲端口。若反复出现，请退出夜神/MuMu/蓝叠等模拟器，或重启电脑。',
+    title: 'Porta do emulador em uso',
+    hint: 'Porta livre selecionada automaticamente. Feche outros emuladores se o conflito persistir.',
   },
   {
     code: 'AVD_LOCK',
     re: /already running|lock file|\.lock|AVD is in use|emulator is running/i,
-    title: '上次运行残留了锁文件',
-    hint: '已自动清理 AVD 锁文件并重新拉起。',
+    title: 'Arquivo de bloqueio antigo detectado',
+    hint: 'Arquivo de bloqueio removido automaticamente e runtime reiniciado.',
   },
   {
     code: 'IMAGE',
     re: /system\.img.*(missing|not found|corrupt)|kernel-ranchu.*(missing|not found)|invalid magic|Failed to open .*\.img|APEX.*(fail|error|loop)|boot loop|verity.*fail/i,
-    title: '系统镜像缺失或损坏 / 与旧用户数据不兼容',
-    hint: '已自动用干净的用户数据重新开机。若仍失败，请在「运行时」里删除镜像后重新下载。',
+    title: 'Imagem do sistema corrompida ou dados incompatíveis',
+    hint: 'Iniciado automaticamente com partição de dados limpa.',
   },
   {
     code: 'DLL',
     re: /0xc0000135|STATUS_DLL_NOT_FOUND|missing DLL|Qt6.*not found|MSVCP140|VCRUNTIME|无法启动此程序|The code execution cannot proceed/i,
-    title: '运行时组件被杀毒软件删除或缺少 VC++ 运行库',
-    hint: '请把 ApkStart 目录加入杀毒软件白名单后重新解压安装包，并安装微软 VC++ 2015-2022 运行库。',
+    title: 'Componente bloqueado pelo antivírus ou falta VC++',
+    hint: 'Adicione a pasta do ApkStart às exceções do antivírus e instale o Visual C++ 2015-2022.',
   },
   {
     code: 'DISK_FULL',
     re: /No space left|disk full|not enough space|磁盘空间不足/i,
-    title: '磁盘空间不足，无法启动安卓',
-    hint: '请把运行时目录（设置 → 系统集成 → 运行时数据目录）改到空间充足的盘，'
+    title: 'Espaço em disco insuficiente para iniciar o Android',
+    hint: 'Altere a Pasta de Dados do Runtime em Configurações → Integração com Windows para outro disco,'
       + '或在设置里关掉「保留快速启动快照」/ 调小数据分区。安卓数据不会被自动清除。',
   },
   {
     code: 'NON_ASCII',
     re: /Unicode|non-ASCII|路径.*(无效|找不到)|cannot find the path/i,
-    title: '安装路径含中文或特殊字符',
-    hint: '已自动改用 Windows 短路径。若仍失败，请把 ApkStart 移到纯英文目录（如 C:\\ApkStart）。',
+    title: 'Caminho de instalação contém caracteres especiais',
+    hint: 'Caminho curto do Windows aplicado. Se persistir, mova para pasta simples (ex: C:\\ApkStart).',
   },
   {
     // 上次被强制结束后 AVD 目录会留下 hardware-qemu.ini.lock / multiinstance.lock，
     // 模拟器一律拒绝启动，报出来的却是容易被误读成 CPU 问题的话。必须排在 CPU 规则前。
     code: 'AVD_LOCK',
     re: /Running multiple emulators with the same AVD|AVD .*is already running|hardware-qemu\.ini\.lock/i,
-    title: '上一次运行没有正常退出，残留了锁文件',
-    hint: 'ApkStart 会自动清掉残留锁并重试；若反复出现，请检查是否有别的模拟器正在用同一套运行时。',
+    title: 'Encerramento anterior incompleto (lock residual)',
+    hint: 'O ApkStart limpa o lock automaticamente e tenta novamente.',
   },
   {
     code: 'CPU_FEATURE',
     re: /host doesn't support requested feature|CPUID.*not supported|unsupported CPU|missing.*(AVX|SSE4|xsave)/i,
-    title: 'CPU 缺少运行时要求的指令集',
-    hint: '这类提示在部分老 CPU 上只是警告、仍能开机；若确实起不来，请把「运行时」里的引擎更新到较旧兼容版本，或换一台支持 VT-x/AVX 的电脑。',
+    title: 'Instruções de CPU não suportadas',
+    hint: 'Aviso de compatibilidade de CPU. O sistema tenta iniciar em modo compatível.',
   },
 
   {
     code: 'SNAPSHOT',
     re: /snapshot|Quick Boot|ram\.img|Saving state/i,
-    title: '快速启动快照损坏',
-    hint: '已自动丢弃旧快照走冷启动；下一次正常退出会重新生成快照。',
+    title: 'Snapshot de inicialização rápida corrompido',
+    hint: 'Snapshot antigo descartado; boot a frio realizado. Um novo snapshot será salvo ao sair.',
   },
 ];
 
@@ -452,16 +445,16 @@ function diagnose(lines) {
   }
   return {
     code: 'UNKNOWN',
-    title: '运行时未能完成开机',
-    hint: '已自动按多种参数组合重试。可点「导出诊断报告」把日志发给作者定位。',
+    title: 'Falha ao inicializar o runtime',
+    hint: 'Foram tentadas múltiplas combinações de parâmetros. Exporte o diagnóstico para detalhes.',
   };
 }
 
 /** 人类可读的一行摘要，放在设置页让高级用户知道自动选了什么 */
 function describeProfile(p) {
-  return `自动：${(p.memoryMB / 1024).toFixed(1)}GB 内存 · ${p.cores} 核 · ${p.gpu} 渲染 · `
-    + `${p.accelOk ? '硬件加速' : '软件模拟'} · ${p.snapshot ? '按需快照' : '冷启动'}`
-    + `${p.lite ? ' · 轻量容器' : ''} · 端口 ${p.port}`;
+  return `Auto: ${(p.memoryMB / 1024).toFixed(1)}GB RAM · ${p.cores} núcleos · Renderizador ${p.gpu} · `
+    + `${p.accelOk ? 'Aceleração por hardware' : 'Emulação por software'} · ${p.snapshot ? 'Snapshots sob demanda' : 'Boot a frio'}`
+    + `${p.lite ? ' · Contêiner leve' : ''} · Porta ${p.port}`;
 }
 
 /** 导出诊断报告（纯文本，便于发邮件/贴 issue） */

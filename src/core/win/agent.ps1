@@ -117,6 +117,7 @@ public class ApkAgent
     // 我们窗口的那一个窗口，其余一律藏起来（含 ApkStart 退出后回到桌面的那个黑窗）。
     static volatile bool _quiet = true;
     static volatile bool _perfMode = false;
+    static volatile bool _detachedMode = false;
     static long _bootHideSweep = 0;
     // 兜底超时：万一 embed 没来（用户只是打开了 ApkStart 没点应用），
     // 不能让 120ms 一轮的扫描永远跑下去白烧 CPU。每次真藏到窗口就续期。
@@ -486,6 +487,14 @@ public class ApkAgent
 
     static void QuietSweep()
     {
+        // 独立窗口模式：模拟器窗口是「用户真正在看的那一扇」，绝不能压制它，
+        // 也不该按宿主客户区去 Fit。这里直接跳过所有压制逻辑。
+        if (_detachedMode)
+        {
+            HideConsoleWindows();
+            HideStrayWindows();
+            return;
+        }
         EnsureReparent();
         // 尺寸自愈：宿主被最大化/缩放后，Electron 的 chrome 层常常没跟着变大，
         // 画面就只剩左上角一条。这里每轮重贴一次（Fit 内部按宿主客户区重算，
@@ -666,7 +675,9 @@ public class ApkAgent
         ex |= WS_EX_APPWINDOW;
         SetWindowLong(_emu, GWL_EXSTYLE, ex);
         SetWindowPos(_emu, IntPtr.Zero, 60, 40, 480, 853, SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-        _emu = IntPtr.Zero;
+        // 独立窗口模式下要保留句柄：show / layout 都靠它定位真实窗口。
+        // 嵌入模式（默认）仍然清空，保持原有语义。
+        if (!_detachedMode) _emu = IntPtr.Zero;
     }
 
     // 与 Detach 相同，但**不显示**窗口：宿主窗口即将销毁时调用。
@@ -681,7 +692,9 @@ public class ApkAgent
         SetParent(e, IntPtr.Zero);
         uint style = (uint)GetWindowLong(e, GWL_STYLE);
         style &= ~WS_CHILD;
-        style |= (uint)(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+        // 把 WS_VISIBLE(0x10000000) 一起补回来：它可能被「SetParent 到隐藏宿主」那次操作隐式清掉，
+        // 第三方底座（MuMu）自己不会重新显示，用户关掉应用窗口后就再也看不到模拟器。
+        style |= (uint)(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | 0x10000000);
         SetWindowLong(e, GWL_STYLE, (int)style);
         int ex = GetWindowLong(e, GWL_EXSTYLE);
         ex |= WS_EX_APPWINDOW;
@@ -943,6 +956,33 @@ public class ApkAgent
         return j < 0 ? "" : line.Substring(i, j - i);
     }
 
+    // 把 "0x1A2B3C" / "17158972" 解析成 HWND。第三方底座（MuMu）报的是十六进制字符串，
+    // 我们自己的调用方也可能直接给十进制，两种都要认。
+    static IntPtr ParseHwnd(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return IntPtr.Zero;
+        string s = raw.Trim();
+        long v = 0;
+        try
+        {
+            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                v = Convert.ToInt64(s.Substring(2), 16);
+            }
+            else if (long.TryParse(s, out v))
+            {
+                // 十进制就是十进制
+            }
+            else
+            {
+                v = Convert.ToInt64(s, 16);
+            }
+        }
+        catch { return IntPtr.Zero; }
+        if (v <= 0) return IntPtr.Zero;
+        return new IntPtr(v);
+    }
+
     static void Reply(Socket s, string json)
     {
         try
@@ -1051,6 +1091,9 @@ public class ApkAgent
                     }
                     else if (cmd == "embed")
                     {
+                        // 从独立窗口切回嵌入：先清掉独立模式标志，恢复常驻压制，
+                        // 否则模拟器窗口会一直被当成「用户在看的那一扇」而不参与 Fit。
+                        _detachedMode = false;
                         // 嵌入即代表「用户要看画面了」。压制不关（它只藏非嵌入窗口
                         // 与控制台黑窗），但要先把窗口从隐藏状态正确地交给 SetParent，
                         // 再由 Fit 的 SWP_SHOWWINDOW 显示出来。
@@ -1070,12 +1113,47 @@ public class ApkAgent
                             _host = want;
                             _hostPid = wantPid;
                             _chromeRender = FindChromeRender(want);
-                            _emu = FindEmulator();
-                            bool ok = Embed(_host, _emu);
+                            // 第三方底座（MuMu 等）会把画面窗口句柄直接报给我们；
+                            // "target" 是逗号分隔的候选列表，逐个 SetParent，
+                            // 第一个真的成为宿主子窗口的就是它。
+                            string targets = S(line, "target");
+                            _emu = IntPtr.Zero;
+                            if (_quiet) { _quiet = false; _bootHideUntil = 0; }   // 别再把要嵌的窗口藏掉
+                            if (!string.IsNullOrEmpty(targets))
+                            {
+                                string[] pieces = targets.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                                for (int i = 0; i < pieces.Length; i++)
+                                {
+                                    IntPtr cand = ParseHwnd(pieces[i]);
+                                    if (cand == IntPtr.Zero || !IsWindow(cand)) continue;
+                                    // 已经嵌进我们宿主的窗口（重复 embed / 换尺寸）：直接用
+                                    if (GetParent(cand) == want || GetParent(cand) == _chromeRender)
+                                    {
+                                        _emu = cand;
+                                        break;
+                                    }
+                                    Embed(_host, cand);
+                                    if (GetParent(cand) == _host || GetParent(cand) == _chromeRender)
+                                    {
+                                        _emu = cand;
+                                        break;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                _emu = FindEmulator();
+                                Embed(_host, _emu);
+                            }
+                            bool ok = _emu != IntPtr.Zero
+                                && (GetParent(_emu) == _host || GetParent(_emu) == _chromeRender);
                             _embedAt = Environment.TickCount;
                             _lastToolSweep = 0;
                             Fit((int)L(line, "x"), (int)L(line, "y"), (int)L(line, "w"), (int)L(line, "h"), true, (int)L(line, "clipTop"));
                             Reply(sock, "{\"ok\":" + (ok ? "true" : "false") + ",\"emu\":" + _emu.ToInt64() + "}");
+                            // 第三方底座的窗口不是我们创建、也不会自己恢复显示：
+                            // 每个候选都要挂上 WS_VISIBLE，否则 SetParent 之后它永远是隐藏的。
+                            if (ok && !string.IsNullOrEmpty(targets)) ShowWindow(_emu, 5);
                         }
                     }
                     else if (cmd == "fit")
@@ -1103,13 +1181,45 @@ public class ApkAgent
                     }
                     else if (cmd == "show")
                     {
+                        // 独立窗口模式下 Detach() 会把 _emu 清空（它按「嵌入结束」处理），
+                        // 所以这里要重新找一次，否则 show/layout 全部作用在空句柄上，
+                        // 表现就是「切独立窗口后模拟器窗口不见了」。
+                        if (_emu == IntPtr.Zero) _emu = FindEmulator();
                         if (_emu != IntPtr.Zero) ShowWindow(_emu, 5);
-                        Reply(sock, "{\"ok\":true}");
+                        Reply(sock, "{\"ok\":" + (_emu != IntPtr.Zero ? "true" : "false") + "}");
                     }
                     else if (cmd == "detach")
                     {
+                        // keep=1 表示「切到独立窗口模式」：不要把它当成
+                        // 「嵌入结束、该把模拟器藏起来」，否则 QuietSweep 会在
+                        // 下一轮把用户正在看的窗口藏掉。
+                        _detachedMode = L(line, "keep") == 1;
+                        // 独立模式可能从没 embed 过（_emu 还是 0），先找一次，
+                        // 否则 Detach 会直接 return，后续 show/layout 全部作用在空句柄上。
+                        if (_emu == IntPtr.Zero) _emu = FindEmulator();
                         Detach();
-                        Reply(sock, "{\"ok\":true}");
+                        Reply(sock, "{\"ok\":true,\"emu\":" + _emu.ToInt64() + "}");
+                    }
+                    else if (cmd == "layout")
+                    {
+                        // 独立窗口模式：模拟器窗口是系统原生窗口，这里只把它摆到
+                        // 指定屏幕矩形（不 SetParent）。方向/缩放/输入都交给它自己，
+                        // 因此不会出现嵌入模式那套黑边、坐标错位、铺不满的问题。
+                        if (_emu == IntPtr.Zero) _emu = FindEmulator();
+                        if (_emu == IntPtr.Zero)
+                        {
+                            Reply(sock, "{\"ok\":false,\"error\":\"no-emu\"}");
+                        }
+                        else
+                        {
+                            // 先确保它是可见的顶层窗口（WS_CHILD 已被 Detach 摘掉）
+                            ShowWindow(_emu, 5);
+                            SetWindowPos(_emu, HWND_TOP,
+                                (int)L(line, "x"), (int)L(line, "y"),
+                                (int)L(line, "w"), (int)L(line, "h"),
+                                SWP_SHOWWINDOW);
+                            Reply(sock, "{\"ok\":true}");
+                        }
                     }
                     else if (cmd == "hook")
                     {
@@ -1127,6 +1237,26 @@ public class ApkAgent
                         RECT r = new RECT();
                         if (e != IntPtr.Zero) GetWindowRect(e, out r);
                         Reply(sock, "{\"ok\":true,\"emu\":" + e.ToInt64() + ",\"w\":" + (r.R - r.L) + ",\"h\":" + (r.B - r.T) + "}");
+                    }
+                    else if (cmd == "winready")
+                    {
+                        // 第三方底座就绪门禁：候选句柄存在 + 状态为「存在」。
+                        // 隐藏判断在 JS 侧做（见 backends/mumu.js 的 windowReady）。
+                        string list = S(line, "target");
+                        int alive = 0;
+                        string first = "";
+                        if (!string.IsNullOrEmpty(list))
+                        {
+                            string[] pieces = list.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                            for (int i = 0; i < pieces.Length; i++)
+                            {
+                                IntPtr h = ParseHwnd(pieces[i]);
+                                if (h == IntPtr.Zero || !IsWindow(h)) continue;
+                                alive++;
+                                if (first.Length == 0) first = pieces[i];
+                            }
+                        }
+                        Reply(sock, "{\"ok\":true,\"alive\":" + alive + ",\"first\":\"" + first + "\"}");
                     }
                     else if (cmd == "consoles")
                     {

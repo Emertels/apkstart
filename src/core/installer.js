@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const store = require('./store');
 const { parseApk } = require('./apk');
 const { ZipFile } = require('./zip');
-const { iconToIco, writeShortcut, removeShortcut, safeFileName } = require('./shortcut');
+const { iconToIco, writeShortcut, removeShortcut, safeFileName, shortcutExt } = require('./shortcut');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -80,20 +80,23 @@ class Installer {
   shortcutPath(app) {
     const s = store.getSettings();
     const dir = s.shortcutDir && s.shortcutDir.trim() ? s.shortcutDir : this.ctx.desktopDir;
-    return path.join(dir, `${safeFileName(app.label)}.lnk`);
+    return path.join(dir, `${safeFileName(app.label)}${shortcutExt()}`);
   }
 
   /**
    * 桌面 + 开始菜单两份。
    * Windows 搜索索引的是「开始菜单 \ 程序」里的 .lnk，只放桌面会搜不到；
    * 有些机器的桌面被 OneDrive 重定向，开始菜单这份也保证入口不丢。
+   *
+   * Linux（FydeOS）那边对应的是 freedesktop 的 .desktop：
+   * 桌面一份，应用菜单 ~/.local/share/applications 一份。
    */
   shortcutPaths(app) {
     const out = [this.shortcutPath(app)];
     if (this.ctx.startMenuDir && store.getSettings().createStartMenuShortcut !== false) {
       // 放在独立子目录：既能被 Windows 搜索索引到，又不会覆盖同名第三方应用的快捷方式
       // （实测「红果免费短剧」在开始菜单里已被另一个桌面助手占用）
-      out.push(path.join(this.ctx.startMenuDir, 'ApkStart', `${safeFileName(app.label)}.lnk`));
+      out.push(path.join(this.ctx.startMenuDir, 'ApkStart', `${safeFileName(app.label)}${shortcutExt()}`));
     }
     return [...new Set(out)];
   }
@@ -102,7 +105,7 @@ class Installer {
   async ensureCompatImage(onProgress) {
     const prov = this.runtime.provisioner;
     if (prov.playImageInfo().ok) return true;
-    onProgress({ stage: 'runtime', message: '首次安装 ARM 应用：正在下载兼容镜像（约 1.5GB，只需一次）…' });
+    onProgress({ stage: 'runtime', message: 'Primeira instalação de app ARM: baixando imagem compatível (aprox. 1,5 GB, apenas uma vez)…' });
     await prov.installPlayImage((p) => onProgress({ stage: 'runtime', message: p.message, percent: p.percent }));
     if (!prov.playImageInfo().ok) throw new Error('兼容镜像下载失败，请检查网络后重试');
     return true;
@@ -112,7 +115,7 @@ class Installer {
   async switchToCompat(onProgress) {
     const apps = store.getApps();
     store.saveSettings({ runtime: { compatImage: true } });
-    onProgress({ stage: 'runtime', message: '正在切换到兼容镜像并重启运行时…' });
+    onProgress({ stage: 'runtime', message: 'Alternando para imagem compatível e reiniciando runtime…' });
     try { await this.runtime.stop(); } catch (_) { /* ignore */ }
     // 等旧设备从 adb 列表里消失，避免被 ensure() 当成可复用实例
     for (let i = 0; i < 12; i += 1) {
@@ -141,14 +144,14 @@ class Installer {
           // eslint-disable-next-line no-await-in-loop
           await rt.client.install(app.apkPath);
         }
-        onProgress({ stage: 'runtime', message: `正在恢复已装应用 ${app.label}…` });
+        onProgress({ stage: 'runtime', message: `Restaurando aplicativo ${app.label}…` });
       } catch (_) { /* 单个应用恢复失败不阻塞 */ }
     }
     return rt;
   }
 
   async install(filePath, onProgress = () => {}) {
-    onProgress({ stage: 'parse', message: '正在解析 APK…' });
+    onProgress({ stage: 'parse', message: 'Analisando APK…' });
     let meta;
     let bundle = null;
     if (/\.(apks|xapk)$/i.test(filePath)) {
@@ -159,7 +162,7 @@ class Installer {
     }
     onProgress({
       stage: 'parse-done',
-      message: `已识别 ${meta.label}（${meta.package}）`,
+      message: `Identificado: ${meta.label} (${meta.package})`, 
       meta: { label: meta.label, package: meta.package, versionName: meta.versionName },
     });
 
@@ -171,7 +174,7 @@ class Installer {
         return this.finishInstall(switched, meta, filePath, bundle, onProgress);
       }
 
-      onProgress({ stage: 'runtime', message: '正在准备安卓运行时…' });
+      onProgress({ stage: 'runtime', message: 'Preparando runtime Android…' });
       const rt = await this.runtime.ensure({ onLog: (m) => onProgress({ stage: 'runtime', message: m }) });
       if (!rt.ok) {
         const err = new Error(rt.error || '运行时不可用');
@@ -190,7 +193,7 @@ class Installer {
     const existing = store.getApp(meta.package);
     // 装完之后旧 quickboot 快照里的磁盘状态就过期了，留着会导致「装好的应用重启后又不见了」
     try { this.runtime.emulator?.invalidateSnapshot(); } catch (_) { /* ignore */ }
-    onProgress({ stage: 'install', message: existing ? '正在更新应用…' : '正在安装应用…' });
+    onProgress({ stage: 'install', message: existing ? 'Atualizando aplicativo…' : 'Instalando aplicativo…' });
     try {
       if (bundle) await client.installMultiple(bundle.files);
       else await client.install(filePath);
@@ -199,7 +202,7 @@ class Installer {
       if (e.code === 'NO_MATCHING_ABIS' && !this.runtime.provisioner.playImageInfo().ok) {
         await this.ensureCompatImage(onProgress);
         const rt2 = await this.switchToCompat(onProgress);
-        onProgress({ stage: 'install', message: '已切换兼容镜像，正在重新安装…' });
+        onProgress({ stage: 'install', message: 'Imagem compatível ativada, reinstalando…' });
         if (bundle) await rt2.client.installMultiple(bundle.files);
         else await rt2.client.install(filePath);
       } else {
@@ -307,6 +310,9 @@ class Installer {
     const { target, baseArgs } = this.shortcutTarget();
     const args = `${baseArgs ? baseArgs + ' ' : ''}--launch "${app.package}"`.trim();
     const ico = app.icoPath && fs.existsSync(app.icoPath) ? app.icoPath : undefined;
+    // Linux 的 .desktop 只认 PNG/SVG 绝对路径，ICO 无效 —— 所以两条路径都传下去，
+    // 由 writeShortcut 按平台挑。（Windows 用 ico，FydeOS 用 png）
+    const png = app.iconPath && fs.existsSync(app.iconPath) ? app.iconPath : undefined;
     const paths = this.shortcutPaths(app);
 
     const write = (shortcutPath) => writeShortcut({
@@ -314,6 +320,7 @@ class Installer {
       target,
       args,
       iconIcoPath: ico,
+      iconPngPath: png,
       description: `${app.label} — 由 ApkStart 运行`,
       cwd: this.ctx.cwd,
       // 每个应用一个 AUMID：任务栏上按应用分组，不会全挤到 ApkStart 里
@@ -336,7 +343,7 @@ class Installer {
     // 主路径全失败（自定义快捷方式目录不可写 / 被安全软件拦截）：
     // 退回桌面再试一次——桌面上有图标，用户才找得到应用。
     if (!first) {
-      const fallback = path.join(this.ctx.desktopDir, `${safeFileName(app.label)}.lnk`);
+      const fallback = path.join(this.ctx.desktopDir, `${safeFileName(app.label)}${shortcutExt()}`);
       try {
         write(fallback);
         first = fallback;
@@ -402,7 +409,7 @@ class Installer {
     return true;
   }
 
-  async launch(pkg, { onLog = () => {}, beforeStart = null, onMark = () => {} } = {}) {
+  async launch(pkg, { onLog = () => {}, beforeStart = null, onMark = () => {}, onAppUp = null } = {}) {
     const app = store.getApp(pkg);
     const rt = await this.runtime.ensure({ onLog });
     onMark('ensure done');
@@ -412,7 +419,12 @@ class Installer {
       throw err;
     }
     // 分辨率要在拉起应用之前改，避免 wm size 触发配置变更把刚启动的 Activity 重建
-    if (beforeStart) await beforeStart(rt).catch((e) => onLog(`显示适配跳过：${e.message}`));
+    if (beforeStart) {
+      const replaced = await beforeStart(rt).catch((e) => { onLog(`显示适配跳过：${e.message}`); return null; });
+      // beforeStart 可以返回一个新的 rt（重启运行时后旧 client 已失效），
+      // 后续全部用新的。不返回就继续用原来的。
+      if (replaced && replaced.client) rt = replaced;
+    }
     // 清掉旧版本可能残留在 /data 里的 wm size / density 覆盖与自动旋转设置。
     // 这些覆盖是持久化的，不清理的话每次启动画面都会被转 90° 躺倒、留黑边、
     // 鼠标点击也无法对应（用户反馈的「旋转黑边 / 未填满 / 点不动同意」）。
@@ -427,11 +439,38 @@ class Installer {
     // 结果 adb 设备在安装途中消失，直接变成「红果打不开」。
     // 启动路径上绝不能做这种破坏性动作，等不到就先启动，大不了页面暂时加载慢。
     if (rt.engine === 'emulator' || rt.engine === 'builtin') {
-      const net = await this.runtime.waitForNetwork({ onLog, timeoutMs: 20000 }).catch(() => null);
+      let net = await this.runtime.waitForNetwork({ onLog, timeoutMs: 20000 }).catch(() => null);
       if (net && net.ok) {
         onLog(`虚拟机网络就绪（${net.ip || ''}）`);
       } else {
-        onLog('虚拟机网络还没就绪，先启动应用（联网页面可能稍后才加载出来）');
+        // 等不到网络时，做一次**非破坏性**的补救：把「已保存但不会自动连」
+        // 的 AndroidWifi 点一下。它不重启虚拟机、不碰用户数据，只是拉起设置页
+        // 点一条已保存的热点，所以放在启动路径上是安全的。
+        // 实机上「虚拟机一直没网」绝大多数就是这个原因（见 emulator.repairWifi）。
+        onLog('虚拟机连不上 Wi-Fi，正在尝试重新连接…');
+        try {
+          // 注意：repairWifi 挂在 engine（this.runtime）上，不在 rt 上。
+          // rt 是 ensure() 的返回对象 { ok, client, engine, ... }，里面只有 client；
+          // 写成 rt.repairWifi 会是 undefined，一调就抛 TypeError 被 catch 吞掉，
+          // 表现就是「日志打了正在重连，但 1 毫秒后就说还是没网」。
+          const fixed = await this.runtime.repairWifi().catch(() => false);
+          if (fixed) {
+            net = await this.runtime.waitForNetwork({ onLog, timeoutMs: 15000 }).catch(() => null);
+            if (net && net.ok) {
+              onLog(`虚拟机网络已恢复（${net.ip || ''}）`);
+              // 关键：把「网络已连上」这个状态立刻存进快照。
+              // 不存的话下次开机还是从「没网」的旧快照恢复，每次都要再花十几秒重连。
+              // 用 forceSnapshotSave 是因为马上要启动应用，永远等不到「空闲」。
+              try { this.runtime.forceSnapshotSave?.(3000); } catch (_) { /* 存不下不影响启动 */ }
+            }
+          }
+        } catch (e) {
+          // 不要把异常吞得无声无息：这条日志就是「重连到底跑没跑」的唯一证据。
+          onLog(`自动重连 Wi-Fi 失败：${e.message}`);
+        }
+        if (!net || !net.ok) {
+          onLog('虚拟机网络还没就绪，先启动应用（联网页面可能稍后才加载出来）');
+        }
       }
     }
     const settings = store.getSettings();
@@ -465,6 +504,13 @@ class Installer {
         if (!String(pid).trim()) {
           if (seen) return false; // 起来过又消失 = 真的崩了
         } else {
+          if (!seen && typeof onAppUp === 'function') {
+            // 进程刚出现就把画面接上去（不等那 4 秒观察期）。
+            // 这 4 秒是在等「确认不会马上崩」，但用户看到的是「点了没反应」；
+            // 先让他看到应用在加载，观感比藏 4 秒好得多。
+            // 回调是 fire-and-forget：它失败了也不影响后面的存活判定。
+            try { onAppUp(); } catch (_) { /* ignore */ }
+          }
           seen = true;
           if (!aliveSince) aliveSince = Date.now();
           if (Date.now() - aliveSince >= 4000) return true;

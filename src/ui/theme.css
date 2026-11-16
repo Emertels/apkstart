@@ -161,6 +161,50 @@ html, body {
   box-shadow: 0 2px 8px rgba(15, 157, 99, .4);
 }
 
+/* ---------------- 「添加应用」虚线卡片 ----------------
+ * 应用少的时候网格下面是一大片空白，用户也不知道还能干什么。
+ * 这块卡片把「拖 APK 进来」摆到眼前，同时把空白填掉。
+ * 用虚线 + 弱化配色，让它看起来是「空位」而不是又一个已经装好的应用。 */
+
+.card-add {
+  background: transparent;
+  border: 1.5px dashed var(--line-strong);
+  box-shadow: none;
+  color: var(--muted);
+  justify-content: center;
+  min-height: 178px;
+}
+.card-add:hover {
+  border-color: rgba(15, 157, 99, .55);
+  border-style: dashed;
+  background: rgba(18, 184, 134, .05);
+  box-shadow: none;
+  color: var(--brand-dark);
+}
+.card-add:active { transform: translateY(0); }
+.card-add:focus-visible {
+  outline: none;
+  border-color: rgba(15, 157, 99, .6);
+  box-shadow: var(--ring);
+}
+
+.card-add .add-plus {
+  width: 52px; height: 52px;
+  margin-bottom: 10px;
+  border-radius: 16px;
+  display: grid; place-items: center;
+  color: var(--faint);
+  background: rgba(20, 32, 26, .045);
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+.card-add:hover .add-plus {
+  color: var(--brand);
+  background: rgba(18, 184, 134, .14);
+  transform: translateY(-1px);
+}
+.card-add .name { font-weight: 600; }
+.card-add .meta { color: var(--faint); }
+
 /* ---------------- 状态栏 ---------------- */
 
 .statusbar {
@@ -170,6 +214,22 @@ html, body {
 }
 
 .dot { box-shadow: 0 0 0 3px rgba(18, 184, 134, .14); }
+
+/* 状态栏里的网络指示：绿灯=已联网，黄灯=虚拟机没网。
+ * 这个坑很隐蔽（应用里只显示「网络错误」，看不出是虚拟机的事），所以放在最显眼处。 */
+.status-net::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: currentColor;
+}
+.status-net.ok { color: var(--brand-ink); }
+.status-net.ok::before { background: var(--brand); box-shadow: 0 0 0 3px rgba(18, 184, 134, .16); }
+.status-net.warn { color: #9a6b00; }
+.status-net.warn::before { background: #e0a100; box-shadow: 0 0 0 3px rgba(224, 161, 0, .16); }
 
 /* ---------------- 模态框 ---------------- */
 
@@ -362,3 +422,190 @@ html, body {
 }
 .welcome-actions .btn { flex: 1; height: 40px; border-radius: 12px; font-size: 13.5px; }
 .welcome-actions .btn.ghost { flex: 0 0 auto; padding: 0 16px; }
+
+
+/* ============================================================================
+ * MODO ESCURO (DARK MODE)
+ * ========================================================================== */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.titlebar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .04);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .2s ease;
+  -webkit-app-region: no-drag;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: var(--brand-2);
+  transform: scale(1.05);
+}
+
+.theme-toggle-btn .icon-sun { display: none; }
+.theme-toggle-btn .icon-moon { display: block; }
+
+[data-theme="dark"] {
+  --bg: #121514;
+  --bg-2: #181d1a;
+  --panel: #1e2421;
+  --panel-2: #242c28;
+  --line: #2d3832;
+  --line-strong: #3d4c44;
+  --text: #e6ede9;
+  --text-2: #c4d1cb;
+  --muted: #889990;
+  --faint: #607068;
+  --brand-soft: #163826;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-md: 0 10px 26px rgba(0, 0, 0, .5);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, .7);
+}
+
+[data-theme="dark"] html,
+[data-theme="dark"] body {
+  background:
+    radial-gradient(1200px 420px at 12% -12%, rgba(18, 184, 134, .08), transparent 62%),
+    radial-gradient(900px 380px at 100% 0%, rgba(15, 157, 99, .06), transparent 58%),
+    var(--bg);
+  color: var(--text);
+}
+
+[data-theme="dark"] .titlebar {
+  background: linear-gradient(180deg, rgba(30, 36, 33, .88), rgba(30, 36, 33, .62));
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+[data-theme="dark"] .theme-toggle-btn {
+  background: rgba(255, 255, 255, .06);
+  border-color: var(--line);
+  color: #f1c40f;
+}
+
+[data-theme="dark"] .theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, .12);
+  color: #f39c12;
+}
+
+[data-theme="dark"] .theme-toggle-btn .icon-sun { display: block; }
+[data-theme="dark"] .theme-toggle-btn .icon-moon { display: none; }
+
+[data-theme="dark"] .statusbar {
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="password"],
+[data-theme="dark"] select {
+  background: var(--bg-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+[data-theme="dark"] .search input {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+[data-theme="dark"] .modal {
+  background: var(--panel);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+[data-theme="dark"] .modal-head {
+  border-bottom: 1px solid var(--line);
+}
+
+[data-theme="dark"] .modal-foot {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+[data-theme="dark"] .group {
+  background: var(--bg-2);
+  border-color: var(--line);
+}
+
+[data-theme="dark"] .card {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+[data-theme="dark"] .card:hover {
+  border-color: var(--brand-2);
+  background: var(--panel-2);
+}
+
+[data-theme="dark"] .btn.ghost {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+[data-theme="dark"] .btn.ghost:hover {
+  background: var(--line);
+}
+
+[data-theme="dark"] .ctxmenu {
+  background: var(--panel);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-lg);
+}
+
+[data-theme="dark"] .ctxmenu-item {
+  color: var(--text);
+}
+
+[data-theme="dark"] .ctxmenu-item:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+[data-theme="dark"] .welcome {
+  background: var(--panel);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+[data-theme="dark"] .empty-art rect[fill="#eef1f4"] {
+  fill: #1a221e;
+  stroke: #2d3832;
+}
+
+[data-theme="dark"] .empty-art rect[fill="#cfd8e3"] {
+  fill: #2d3832;
+}
+
+[data-theme="dark"] .empty-art rect[fill="#dde5ee"],
+[data-theme="dark"] .empty-art rect[fill="#e6ecf3"] {
+  fill: #242c28;
+}

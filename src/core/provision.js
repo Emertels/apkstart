@@ -11,7 +11,7 @@ const zlib = require('zlib');
 const { spawn, execFile } = require('child_process');
 const store = require('./store');
 const doctor = require('./doctor');
-const { download, downloadAny, downloadAnyParallel, downloadMulti, head, discardPartial } = require('./download');
+const { download, downloadAny, downloadAnyParallel, downloadMulti, head } = require('./download');
 const { ZipArchive, ZipFile } = require('./zip');
 const { Sources } = require('./sources');
 const { cmpVer } = require('./version');
@@ -112,20 +112,6 @@ function run(cmd, args, { timeout = 60000, cwd, windowsHide = true } = {}) {
 
 function fileSize(p) {
   try { return fs.statSync(p).size; } catch (_) { return 0; }
-}
-
-/**
- * 下载完的完整性检查。不通过就**删掉这个不完整文件**。
- *
- * 以前这里只抛错、不删文件，于是 tmp 里永远留着一个半截 zip。下次进来
- * download() 看到已有文件就带 Range 续传 —— 若服务器/源变了，续传来的字节
- * 和前半截拼不上，又失败、又留半截……用户看到的就是「一直重复下载」。
- */
-function assertComplete(file, minBytes, label) {
-  const size = fileSize(file);
-  if (size >= minBytes) return size;
-  discardPartial(file);
-  throw new Error(`${label}下载不完整（${(size / 1048576).toFixed(1)} MB），已清理，请重试`);
 }
 
 /**
@@ -456,7 +442,7 @@ class Provisioner {
       }),
     });
 
-    assertComplete(zipPath, MIN_SIZE.adb, 'adb 安装包');
+    if (fileSize(zipPath) < MIN_SIZE.adb) throw new Error('adb 安装包下载不完整');
 
     onProgress({ stage: 'extract', message: '解压 adb…', percent: 92 });
     await this.extractZip(zipPath, p.root);
@@ -571,7 +557,7 @@ class Provisioner {
         });
       },
     });
-    assertComplete(zip, 200 * 1024 * 1024, '运行时整包');
+    if (fileSize(zip) < 200 * 1024 * 1024) throw new Error('运行时整包下载不完整，可重试续传');
 
     onProgress({ stage: 'extract', message: '解压运行时（约 1 分钟）…', percent: 91 });
     await this.extractZip(zip, p.root, {
@@ -965,7 +951,7 @@ class Provisioner {
         canResume: true,
       }),
     });
-    assertComplete(zip, MIN_SIZE.emulator, '运行时引擎');
+    if (fileSize(zip) < MIN_SIZE.emulator) throw new Error('运行时引擎下载不完整，可重试续传');
 
     onProgress({ stage: 'extract', message: '解压运行时引擎…', percent: 88 });
     await this.extractZip(zip, p.root);
@@ -1063,7 +1049,7 @@ class Provisioner {
         canResume: true,
       }),
     });
-    assertComplete(zip, MIN_SIZE.sysimg, '兼容镜像');
+    if (fileSize(zip) < MIN_SIZE.sysimg) throw new Error('兼容镜像下载不完整，可重试续传');
 
     const dest = path.join(p.sysImgRoot, `android-${PLAY_SYSIMG.api}`, PLAY_SYSIMG.tag);
     fs.mkdirSync(dest, { recursive: true });
@@ -1102,7 +1088,7 @@ class Provisioner {
     if (!has) throw new Error('AEHD 驱动包解压异常');
     this._cache.accel = null;
     this._cache.accelAt = 0;
-    onProgress({ stage: 'done', message: 'AEHD 驱动已就绪，需管理员权限安装', percent: 100 });
+    onProgress({ stage: 'done', message: 'Driver AEHD pronto para instalação', percent: 100 });
     return { ok: true, dir: p.aehdDir, installer: path.join(p.aehdDir, 'silent_install.bat') };
   }
 
@@ -1137,7 +1123,7 @@ class Provisioner {
     await this.guardDisk('qemu', p.root);
     const setup = path.join(p.tmp, 'qemu-setup.exe');
 
-    onProgress({ stage: 'resolve', message: '查找最新 QEMU 版本…', percent: 1 });
+    onProgress({ stage: 'resolve', message: 'Buscando versão do QEMU…', percent: 1 });
     const url = await this.resolveQemuUrl();
     onProgress({ stage: 'download', message: `下载 QEMU（约 200MB）…`, percent: 2, url });
 
@@ -1151,9 +1137,9 @@ class Provisioner {
         canResume: true,
       }),
     });
-    assertComplete(setup, MIN_SIZE.qemu, 'QEMU 安装包');
+    if (fileSize(setup) < MIN_SIZE.qemu) throw new Error('QEMU 安装包下载不完整');
 
-    onProgress({ stage: 'install', message: '正在安装 QEMU（静默）…', percent: 96 });
+    onProgress({ stage: 'install', message: 'Instalando QEMU silenciosamente…', percent: 96 });
     // qemu-w64-setup 是 NSIS 安装器：/S 静默，/D 指定目录（必须最后且不加引号）
     const target = p.qemuDir;
     fs.mkdirSync(target, { recursive: true });
@@ -1260,7 +1246,7 @@ class Provisioner {
       throw new Error('未找到 qemu-img.exe，请先安装 QEMU');
     }
     store.saveSettings({ runtime: { diskPath: dest } });
-    onProgress({ stage: 'done', message: '虚拟磁盘已创建', percent: 100, path: dest });
+    onProgress({ stage: 'done', message: 'Disco virtual criado com sucesso', percent: 100, path: dest });
     return { ok: true, path: dest, size: fileSize(dest) };
   }
 
