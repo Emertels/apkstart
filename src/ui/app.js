@@ -736,7 +736,9 @@ async function refreshAndroid() {
 function updateVolumeSliderStyle(val) {
   const el = $('setAndroidVolume');
   if (el) {
-    el.style.background = `linear-gradient(to right, #12b886 0%, #12b886 ${val}%, #233128 ${val}%, #233128 100%)`;
+    const pct = Math.max(0, Math.min(100, Number(val) || 0));
+    el.style.setProperty('--volume-fill', `${pct}%`);
+    el.style.setProperty('background', `linear-gradient(to right, #12b886 0%, #2ee6a6 ${pct}%, #2b3930 ${pct}%, #2b3930 100%)`, 'important');
   }
 }
 
