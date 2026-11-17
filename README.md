@@ -1,331 +1,118 @@
-# ApkStart
+# 🚀 ApkStart PT-BR v0.5.8
 
-<p align="center"><img src="docs/images/logo.png" alt="ApkStart Logo" width="160" /></p>
+<p align="center">
+  <b>🇧🇷 Português</b> | <a href="README.en.md">🇺🇸 English</a>
+</p>
 
-[![CI](https://github.com/RoutineMiku/apkstart/actions/workflows/ci.yml/badge.svg)](https://github.com/RoutineMiku/apkstart/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/RoutineMiku/apkstart?include_prereleases&sort=semver)](https://github.com/RoutineMiku/apkstart/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D6.svg)](#)
+[![Release](https://img.shields.io/github/v/release/Emertels/apkstart?include_prereleases&sort=semver&style=flat-square&color=blue)](https://github.com/Emertels/apkstart/releases)
+[![Plataforma](https://img.shields.io/badge/Plataforma-Windows%2010%20%2F%2011%20x64-0078D6.svg?style=flat-square)](https://www.microsoft.com/windows)
+[![Licença](https://img.shields.io/badge/Licen%C3%A7a-MIT-brightgreen.svg?style=flat-square)](LICENSE)
+[![Idioma](https://img.shields.io/badge/Idioma-Portugu%C3%AAs%20(Brasil)-success.svg?style=flat-square)](#)
+[![Modo Escuro](https://img.shields.io/badge/Tema-Modo%20Escuro%20Nativo-1e2421.svg?style=flat-square)](#)
 
-**Windows 上的安卓应用运行器 —— 让安卓应用像 Windows 原生软件一样被安装和使用。**
-注：本项目为早期版本，作者自娱自乐产物，所有修改都是作者下班和休息日在处理，开源免费，不插广告，暂时也不是很好用，没有找过营销号推广，无妄之灾。
+Um aplicativo desktop moderno, ultraleve, portátil e de alto desempenho para Windows, projetado para instalar e executar aplicativos Android em **janelas individuais e independentes**, com suporte a **Modo Escuro nativo**, atalhos reais na Área de Trabalho e integração completa com o sistema — **100% em Português do Brasil** e sem nenhum anúncio ou bloatware.
 
-- 🖱️ **双击 .apk 即安装**：注册 .apk 文件关联后，在资源管理器里双击 APK，自动解析 → 安装 → 生成桌面图标，全程无需打开任何模拟器界面。
-- 🧩 **每个应用一个桌面图标**：图标从 APK 内部离线提取并转为多尺寸 ICO，双击桌面图标 = 直接启动该应用，与打开一个原生 Windows 软件的体验一致。
-- 🪟 **应用就是一个窗口**：运行时以**带窗口**模式启动（无头模式下 Android 不出 VSYNC，应用进程活着但屏幕上是空的），ApkStart 把这块窗口改标题、换真实应用图标、按竖屏比例摆好位置，就是一个独立应用窗口；**全屏**铺满屏幕高度并居中，**窗口模式**可自由拖动缩放且按应用记忆尺寸。
-- 🔍 **能被 Windows 搜到**：安装后同时创建桌面 + 开始菜单（`程序\ApkStart\`）快捷方式，按应用名在开始菜单搜索即可直达，任务栏按应用分组。
-- 📁 **数据互通**：`%USERPROFILE%\ApkStartShared` ↔ 安卓内 `/sdcard/ApkStartShared` 持续双向同步，安卓应用存下的文件直接出现在本机。
-- 🪶 **极致轻量**：壳层本身零第三方依赖（连 ZIP / PNG / ICO / AXML 解析都是手写的），运行时按需拉起，空闲自动回收；也可以完全复用你机器上已有的安卓运行时，额外占用为零。
+---
 
-![主界面](docs/images/app.png)
+## ✨ Principais Funcionalidades
 
-```
-┌────────────────────────────────────────────────────────────┐
-│  桌面图标（真实应用图标 .lnk）                              │
-│      │  双击                                               │
-│      ▼                                                     │
-│  ApkStart.exe --launch <包名>                              │
-│      │  运行时未启动？→ 自动拉起（Android Emulator + API34）│
-│      ▼                                                     │
-│  按系统解析出的 LAUNCHER 入口启动（不是 APK 里的主 Activity）│
-│      │  存活观察 18 秒，闪退自动重试 / 重置数据 / 补权限     │
-│      ▼                                                     │
-│  模拟器窗口 = 应用窗口（改标题、换图标、竖屏比例、全屏居中） │
-└────────────────────────────────────────────────────────────┘
-```
+- **🖱️ Instalação com Dois Cliques no `.apk`:** Associe arquivos `.apk` ao ApkStart para instalar aplicativos com dois cliques direto do Explorador de Arquivos do Windows, sem necessidade de abrir interfaces de emuladores pesados.
+- **🧩 Motor 100% Autônomo e Standalone (v0.5.8):** A versão 0.5.8 elimina qualquer dependência de emuladores externos de terceiros. Inclui seu próprio runtime Android x86_64 otimizado, inicialização instantânea e isolamento completo.
+- **🩺 Diagnóstico Pré-Voo de Hardware (Preflight):** Verificação inteligente em tempo real da virtualização na BIOS (VT-x/SVM), Hyper-V / WHPX, integridade do sistema operacional, memória RAM e detecção do fabricante de GPU (NVIDIA / AMD / Intel).
+- **🎮 Perfis e Drivers de Compatibilidade de GPU:** Gerenciamento nativo de perfis de driver para contornar falhas gráficas, com backend selecionável (Host, ANGLE Direct3D 11, SwiftShader) e isolamento seguro.
+- **🧠 Alocação Dinâmica e Conservadora de Recursos:** Sistema de dimensionamento automático de vCPU, memória RAM e disco que impede que o Android sobrecarregue ou congele o Windows.
+- **📱 Atalhos Reais na Área de Trabalho e Menu Iniciar:** O ícone do aplicativo é extraído em alta definição e transformado em atalho na Área de Trabalho. Clicar nele abre diretamente o aplicativo desejado.
+- **🪟 Janelas Individuais e Independentes:** Cada app é executado em uma janela própria, redimensionável, que memoriza seu tamanho anterior, suporta modo tela cheia (`F11`) e rotação instantânea entre modo retrato e paisagem (`Ctrl + R`).
+- **🌙 Modo Escuro (Dark Mode) Integrado:** Botão discreto e elegante posicionado no centro do topo da janela para alternar entre tema Claro e Escuro com um único clique, com barra de rolagem e controles de volume em verde esmeralda.
+- **🔇 Supressão Automática de Diálogos QEMU:** O agente em segundo plano suprime silenciosamente janelas indesejadas de "Saving state..." ou "QuickBoot", mantendo a inicialização limpa.
+- **📁 Sincronização Bidirecional de Arquivos:** Pasta compartilhada contínua entre o computador (`%USERPROFILE%\ApkStartShared`) e a máquina Android (`/sdcard/ApkStartShared`).
+- **⚡ Desempenho e Leveza Máxima:** O motor de virtualização permanece em segundo plano; ao fechar a janela, ele suspende processos para poupar 100% de CPU para suas tarefas no Windows.
+- **🛡️ 100% Livre de Anúncios e Bloatware:** Código limpo e transparente, sem jogos patrocinados ou notificações invasivas.
 
-## 下载即用（不想编译）
+---
 
-两个源内容一致，国内建议用 Gitee：
+## 🚀 Como Usar
 
-- GitHub：[github.com/RoutineMiku/apkstart/releases](https://github.com/RoutineMiku/apkstart/releases)
-- Gitee：[gitee.com/daily-miku/apkstart/releases](https://gitee.com/daily-miku/apkstart/releases)（国内直连快得多）
+1. Baixe o pacote portátil (`ApkStart-v0.5.8-PTBR-win64-portable.zip`) na aba [Releases](https://github.com/Emertels/apkstart/releases).
+2. Extraia para uma pasta de sua preferência e execute o **`ApkStart.exe`**.
+3. O ApkStart fará a verificação inicial do seu computador e preparará o ambiente de forma automática.
+4. Arraste qualquer arquivo `.apk` para a janela do ApkStart ou clique duas vezes no `.apk` no seu Windows.
+5. Um atalho com o ícone do aplicativo será criado na sua Área de Trabalho para você abrir quando quiser!
 
-安装包（三种形态，内容与版本号完全一致）：
+---
 
-| 形态 | 文件名 | 何时选它 |
-|---|---|---|
-| 商店版 | `ApkStart_<四段版本>_x64.msix` | 从 Microsoft Store 装。内置完整运行时，装完不联网；自更新交给商店 |
-| 完整便携版 | `ApkStart-v*-win64-full.zip`（约 830 MB，解压 ~1.3 GB） | **不想装、也不想等下载**：解压即用，运行时（模拟器 + 系统镜像）全在包里 |
-| 安装版 | `ApkStart-v*-Setup.exe`（约 1.3 GB） | 想要桌面/开始菜单快捷方式、卸载项 |
-| 轻量便携版 | `ApkStart-v*-win64-portable.zip`（96 MiB，解压 ~227 MB） | 只想先试试，首次启动再联网下载运行时 |
+## 📐 Estrutura do Projeto
 
-> 所有形态的 `ApkStart.exe` 都写入了**品牌图标 + 版本资源**（FileDescription = `ApkStart 安卓应用运行器`，
-> CompanyName = `RoutineMiku`，版本与 `package.json` 同步），不再是 Electron 的默认图标和 `33.x` 版本号。
-> 自己从源码打包时：`npm run pack`（轻量）/ `npm run pack:full`（完整）/ `npm run build:msix`（商店包）。
-
-### 画面铺满是怎么做到的
-
-模拟器的**物理面板方向**（`hw.lcd.width/height`）就是画面的真实形状。面板方向和应用自己声明的
-`screenOrientation` 不一致时，Android 只会给应用一个信箱式的中间窄条 —— 两侧补黑，换窗口大小、
-改 `wm size`、改 letterbox 样式都填不满（这套组合逐项试过，见 `src/core/apk.js` 的注释）。
-
-所以 ApkStart 在**安装 APK 时离线解析 `AndroidManifest.xml`**，统计出这个应用天然是横屏还是竖屏
-（启动 Activity 加权；全 `sensor` / `fullSensor` 的会在首次运行后再问安卓要一次实际值），存进
-`apps.json`，启动时按它选面板：
-
-- 红果短剧这类竖屏应用 → 竖屏面板 720×1280，正立、铺满、density 190（sw606dp）同时给出平板排版；
-- 墨读这类横屏应用 → 横屏面板 1280×720，正立、铺满。
-
-只有「面板方向和应用方向不一致」的那一次才重启运行时（约 40 秒，标题栏会给出提示），
-之后同方向的应用都是秒进。标题栏的旋转按钮会把这个应用的方向**记住**（其它应用不受影响），
-设置 → 应用窗口 → 屏幕方向可以改成「强制横屏 / 强制竖屏」。
-
-排版由「逻辑密度」决定：720 宽按 190dpi 算等于 **606dp**，正好越过 Android 的 600dp 平板断点，
-红果短剧的双列剧集页、设置页分栏都只在这个密度下出现（镜像默认 320dpi 只有 360dp，是手机排版）。
-这就是设置里的「平板排版」开关，默认打开；关掉会回到手机排版。
-
-### 在线更新（自动选较快的源）
-
-设置 → **软件更新** → 「检查更新」，或托盘右键 → 「检查更新」。发现新版本后点「立即更新」即可。
-
-- 安装版下载 `ApkStart-v*-Setup.exe` 静默安装；
-- 轻量版下载 `ApkStart-v*-win64-portable.zip`，解压后覆盖**程序目录**——运行时目录（`%APPDATA%\apkstart\runtime`）、已装应用与快照都不在程序目录里，所以更新不会丢东西；
-- 替换动作由一段独立 PowerShell 脚本完成（等主进程退出 → 覆盖 → 重新拉起），**不会出现「请手动关闭程序」的弹窗**，也不会在桌面上残留模拟器窗口。
-
-更新链路不是死连 GitHub，而是**每次现测现选**：
-
-1. 同时问 GitHub 与 Gitee 的最新版本，取版本号更高的那个（一个源超时/被墙不影响另一个）；
-2. 把「源站直连 / Gitee 同名资产 / 镜像前缀」列成候选，每个地址真下 256KB 测速，
-   只算「收到首字节之后」的吞吐（握手时间不计入，否则高延迟大带宽的源会被误判成慢）；
-3. 按实测速度排序，用最快的那条分块并行下载；失败自动换下一条。
-
-设置里的「下载与更新源」可以强制只用某一边（企业网络只放行一个域名时用），
-也可以关掉公共加速镜像、或改用自建镜像前缀。Gitee 附件单文件上限 100MB，
-便携包换用 7-Zip 的 deflate（`-mx=9`）压缩后是 **95.0MB**，所以 Gitee 上也是
-一个能直接双击解压的整包（以前要切成 `.part1/.part2` 手工拼接，那版已经废弃）。
-两个源的同名包体积并不完全一样，客户端按测速结果只挑一个源下完，不会混拼。
-
-两个仓库都是公开的，Gitee 的发行版列表匿名就能读，不需要填任何 token。
-（只有在 Gitee 限流返回 403/429 时，才需要在设置里填一个只读 token 提高额度。）
-
-
-**开箱即有的默认行为**（不用去设置里找）：
-
-- 开机自动启动，常驻托盘；双击桌面图标直接进应用。
-- 安装 APK 后自动创建**桌面 + 开始菜单**两份快捷方式，Windows 搜索能直接搜到应用名；老版本漏建的会在启动时自动补齐。
-- 应用窗口是原生渲染（非投屏）：**全屏**铺满屏幕高度并居中、保持手机比例不变形；**窗口模式**保持竖屏，可自由拖动缩放，每个应用的尺寸单独记忆。随时按 `F11` 或右键托盘切换。
-- 安装后自动授予应用申请的运行时权限，不会卡在系统授权框；应用闪退会自动重试、必要时重置应用数据后再拉起。
-- **网络直接用主机的网络**：安卓侧走 QEMU 用户态 NAT，出口复用主机的物理网卡，**不会在 Windows 上创建任何虚拟网卡 / 虚拟交换机**（不需要装驱动、也不多一个网络适配器）。不需要联网下载、不需要改任何网络设置。
-
-## 从源码构建
-
-```powershell
-# 1. 安装依赖（含 Electron 运行时）
-npm install
-
-# 2. 启动并完成运行时部署（一次性下载 adb / Android Emulator / 系统镜像）
-npm start
-
-# 3.（可选）注册 .apk 双击安装
-npm run assoc:on
-
-# 4. 打包便携版（免安装，可直接分发）
-npm run pack
-# 产出 dist/ApkStart-win64-portable/ApkStart.exe
-# 5. 压成 zip 发布（必须用这个脚本，别用 Compress-Archive：体积会大 5MB、塞不进 Gitee）
-node build/zip.js dist/ApkStart-win64-portable ApkStart-win64-portable.zip
-```
-
-### 单文件 EXE（内置完整运行时，装完不再联网）
-
-如果希望「一个 EXE 发出去，对方双击就能跑，不用等下载」，用这条：
-
-```powershell
-# 先把 engine/ 整理成可分发运行时（system.img 用 xz/LZMA2 极限压缩，3.1GB → 约 1.1GB；
-# 同时裁掉 emulator 里用不到的部分：arm64 的 QEMU、Vulkan 后端、多语言包、qsn/自检工具、VR 资源）
-npm run runtime
-
-# 再打成安装版 EXE（electron-builder nsis 目标，装到当前用户目录）
-npm run build:exe
-# 产出 dist/release/ApkStart-<版本>-Setup.exe
-```
-
-体积构成（实测）：Electron 约 180MB、emulator 瘦身后约 480MB、系统镜像 xz 压缩后约 1.1GB，
-最终安装包约 1.32GB（相比 gzip 方案省约 490MB）。能再压的硬下限就在 system.img 那条
-（它就是安卓系统本身，且是 verity 保护的镜像，无法从外部裁掉 GMS 组件）。
-网络默认走主机 NAT，不创建虚拟网卡，所以也不依赖任何额外驱动。
-
-首次启动会把 xz 镜像展开到 `%APPDATA%\apkstart\system-images`（约 20 秒，只做一次），
-之后每次直接复用。AVD 与已装应用固定存放在 `%APPDATA%\apkstart\avd`，
-即使便携版每次解压到临时目录也不会丢。
-
-## 运行时说明：完全独立，不依赖任何第三方模拟器
-
-ApkStart 是一个**自持**的项目，运行时组件全部由自己下载、校验和管理（位于 `%APPDATA%\apkstart\runtime`）。
-轻量版默认从**本项目的 GitHub Release** 下载整包（`ApkStart-runtime-*.zip`），拿不到才退回下表里的官方源：
-
-| 组件 | 来源 | 大小 | 用途 |
-|---|---|---|---|
-| adb（platform-tools） | dl.google.com 官方源 | ~8 MB | 安装/启动安卓应用 |
-| Android Emulator | dl.google.com 官方源（8 线程并行下载） | ~440 MB | 运行时引擎（自带设备模型与 GPU 转译） |
-| Android 14 通用系统镜像（Google Play x86_64） | dl.google.com 官方源 | 源镜像 ~3.1 GB（xz 后 ~1.1 GB） | 唯一的基础层：x86 应用、仅含 ARM 库的应用、GMS 都能跑，镜像即系统，无需安装 |
-| AEHD 驱动（可选） | dl.google.com 官方源 | ~0.2 MB | 硬件加速（或用 Windows「虚拟机平台」WHPX） |
-
-首次使用时，「运行时」页会引导完成以上部署（**一键部署**）：
-1. adb 与运行时引擎、系统镜像自动下载（官方源实测 10+ MB/s）；
-2. 部署完成后**自动开机**，之后双击桌面图标自动拉起，全程无感。
-
-![运行时部署向导](docs/images/setup.png)
-
-**设备兼容性（自动处理，无需干预）**
-
-- 没有硬件加速时自动回退软件模拟；启动失败按「渲染后端 → 加速方式 → 内存/冷启动」最多 4 组参数自动重试。
-- `-gpu` 按引擎版本自动选择（37.x 用 `software`，老版本用 `swiftshader_indirect`），不再使用已弃用的模式。
-- 内存/核心数按物理内存自动推导（2–4 GB / 2–4 核），数据分区从 16 GB 降到 4 GB；端口动态挑空闲的，中文路径自动转短路径，AVD 锁文件自动清理。
-- 失败原因会翻译成中文并附上修复建议；设置里可「导出诊断报告」。
-- 大文件下载默认 **8 线程分块 + 断点续传**，不支持 Range 的源自动回退单流。
-- **只用自带运行时，与其它模拟器无关**：ApkStart 不探测、不接管、也不驱动你机器上装的 MuMu / 雷电 / 蓝叠 / WSA；
-  装没装它们、它们怎么升级、端口怎么变，都不影响 ApkStart。设置里也不再提供「切换引擎」的选项。
-- **本机体检 · 自动配置**：装完先查一遍 CPU 虚拟化（VT-x/SVM）、Windows 虚拟机监控程序平台、
-  显卡与显存、内存和系统版本；能自动改的（内存 / 核心 / 画质 / 渲染后端）直接写进设置并固化成驱动，
-  需要管理员权限的给按钮，只能在 BIOS 里改的告诉你怎么改。见 [docs/preflight.md](docs/preflight.md)。
-- **驱动（兼容补丁）扩展**：如果某台机器必须改启动参数才跑得起来（老显卡 GLES 版本低、没开硬件加速、
-  某版驱动一开硬件渲染就崩），可以写一份 JSON 补丁：声明匹配哪些机器、命中后改哪些参数。
-  设置页里能导入、启用、导出本机模板；补丁只改白名单里的启动项，不执行任何代码。见 [docs/drivers.md](docs/drivers.md)。
-
-**容器式低成本运行**
-
-- **只读基础层**：`system-images/` 全机一份，所有应用共享，不再同时存 AOSP + 兼容两套镜像。
-- **薄可写层**：单个 AVD 用差量用户数据 + 命名 quickboot 快照；关闭最后一个应用窗口后（空闲时）把内存状态存成快照，下次开机走恢复而不是冷启动。
-- **空闲预热（默认开启）**：像 WSA / 应用宝电脑版一样，ApkStart 一启动就在后台把安卓环境引导好（窗口全程隐藏），点应用时只剩一次 `am start`；代价是空闲常驻约 1 GB 内存，设置里可关闭。
-- **冷启动提速**：加速与引擎版本探测结果落盘缓存（按 exe 指纹失效）、跳过无谓的 `wmic` 进程枚举、开机探测改为自适应间隔（350ms 起）、guest 侧准备命令合并成一次 adb 往返；一次启动少等 5–10 秒。
-- **`/data` 由 ApkStart 自己造**：官方系统镜像里的 `userdata.img` 只是 1 MB 全零占位，真正的格式化原本由 SDK 工具完成 —— 直接拉 `emulator.exe` 会跳过这一步，于是 `/data` 挂不上、guest 掉进 recovery 重启循环，表现就是「等好几分钟还是打不开」。现在首次启动会自己生成一份 4 KB block、带 `ENCRYPT`（文件级加密）与 `ext_attr`（SELinux 标签）的 ext4，并用自带的 `qemu-img` + `resize2fs` 撑到配置的容量。实测冷启动 ~23 秒、命中快照 ~10 秒。
-- 快照完整性校验：保存被打断留下的空壳（只有几十字节的 `snapshot.pb`）会被识别并清理；新版 emulator 写的是 `ram.bin`（老版本是 `ram.img`），两种命名都认，不会再把刚存好的 3 GB 快照误判成空壳删掉。
-- **命令窗口彻底不出现**：qemu 的控制台窗口属于 `conhost.exe`，pid 和 qemu 对不上，靠 pid 白名单一个都藏不住；模拟器的网络守护进程 `netsimd` 还会自己再弹一个黑窗。现在改为「启动模拟器**之前**就打开常驻压制 + 按窗口类名/标题兜底（emulator / qemu / netsim）+ 开机 90 秒内 120ms 扫一次」。
-- **打开软件只看到软件界面**：模拟器主窗（`Android Emulator - apkstart5554`）永远不会单独出现在桌面上 —— 它要么被压制隐藏，要么已经被 `SetParent` 嵌进应用窗口。关掉应用窗口时会**先**把它从宿主窗口上摘下来并藏好，**再**销毁宿主（顺序反了 Windows 会把它重新挂到桌面并显示）；应用退出后窗口代理还会继续「守」最多 3 分钟，避免开机途中退出的那台模拟器在几十秒后把黑窗亮出来。
-- **按需下载**：遇到仅含 ARM 原生库的应用才会补齐通用镜像；`.apks` / `.xapk` 拆分包自动用 `install-multiple` 安装。
-- **可回收**：构建时裁掉非 x86_64 的 QEMU 目标（约 400 MB）；设置页可清理旧镜像、旧快照、锁文件和遗留 AVD。
-
-## 目录结构
-
-```
+```text
 apkstart/
-├─ src/
-│  ├─ main.js              主进程：窗口/托盘/单实例/命令行分发/IPC
-│  ├─ preload.js           安全桥接
-│  ├─ ui/                  渲染层（原生 HTML/CSS/JS，无框架）
-│  └─ core/
-│     ├─ zip.js            极简 ZIP 读取器（按需解压）
-│     ├─ axml.js           Android 二进制 XML 解析
-│     ├─ arsc.js           resources.arsc 资源表解析（应用名/图标路径还原）
-│     ├─ apk.js            APK 元信息：包名/版本/启动 Activity/图标/ABI
-│     ├─ png.js            零依赖 PNG 编码器 + 程序图标绘制
-│     ├─ shortcut.js       多尺寸 ICO 生成 + .lnk 快捷方式
-│     ├─ assoc.js          .apk 文件关联（HKCU，免管理员）
-│     ├─ adb.js            adb 客户端（安装/启动/同步/截图/…）
-│     ├─ engine.js         运行时管理：探测/模拟器托管/空闲回收
-│     ├─ sharer.js         本机 ↔ 安卓共享目录双向同步
-│     ├─ installer.js      安装流水线编排
-│     └─ store.js          应用清单与设置持久化
-├─ engine/                 运行时组件下载缓存（emulator / system-images / platform-tools）
-├─ tools/platform-tools/   便携 adb 放置处
-├─ test/                   单元测试 + Electron 集成测试 + 冒烟截图
-├─ build/pack.js           便携版打包
-└─ scripts/assoc.js        .apk 关联命令行开关
+├── src/
+│   ├── core/               # Módulos de virtualização, ADB, provisionamento e instalador
+│   │   ├── win/            # Agente PowerShell em segundo plano e supressão de popups
+│   │   ├── adb.js          # Comunicação via Android Debug Bridge
+│   │   ├── preflight.js    # Diagnóstico de hardware, Hyper-V, WHPX, BIOS e GPU
+│   │   ├── drivers.js      # Gerenciamento de perfis de compatibilidade de GPU
+│   │   ├── resources.js    # Alocador dinâmico de vCPU, RAM e armazenamento
+│   │   ├── doctor.js       # Auto-verificação do sistema e diagnóstico inteligente
+│   │   ├── emulator.js     # Gerenciamento de ciclo de vida da máquina virtual
+│   │   └── installer.js    # Extração de metadados, ícones e instalação de APKs
+│   ├── ui/                 # Interface do usuário (Electron / HTML5 / CSS3 / Vanilla JS)
+│   │   ├── index.html      # Janela principal do inicializador (100% PT-BR)
+│   │   ├── app.js          # Lógica da interface, eventos e alternador de tema
+│   │   ├── theme.css       # Estilos visuais, variáveis de cor, scrollbar verde e Modo Escuro
+│   │   ├── splash.html     # Janela de splash com barra de progresso em tempo real
+│   │   └── splash.js       # Controle de carregamento e fadeout do splash
+│   ├── main.js             # Processo principal do Electron, menus de bandeja e atalhos
+│   └── preload.js          # Ponte de segurança IPC entre Node.js e Chromium
+├── package.json            # Metadados e scripts de empacotamento do projeto
+├── LICENSE                 # Licença de código aberto MIT
+├── README.md               # Apresentação do projeto em Português
+└── README.en.md            # Documentação em Inglês
 ```
 
-## 命令行
+---
 
-```
-ApkStart.exe                      打开主界面
-ApkStart.exe <路径\to.apk>        安装 APK
-ApkStart.exe --launch <包名>      直接启动应用（桌面快捷方式使用此参数）
-```
+## 📄 Licença e Créditos
 
-## 测试
+Distribuído sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
 
-```powershell
-npm test                                   # 纯 Node 单元测试 + 引擎链路测试（不需要网络）
-npm run test:boot                          # 真实引导测试：用 61MB Alpine guest 验证 QEMU 参数/建盘/优雅关机
-npm run selftest                           # 运行时自检：装好 Android 后一键验证 安装→启动→截图→共享目录
-electron test/electron-integration.js      # ICO / 快捷方式集成测试
-electron . --smoke test\shot.png           # 启动应用并截图（界面冒烟）
-```
+* **Tradução, Localização PT-BR e Modo Escuro:** Desenvolvido e mantido por **Emerson Teles** ([@Emertels](https://github.com/Emertels)).
+* **Projeto Base Original:** Baseado no projeto de código aberto desenvolvido por **[RoutineMiku](https://github.com/RoutineMiku/apkstart)**.
 
-`npm run selftest` 是装好系统后的「验收命令」——它会对当前设备依次检查 adb 连接、
-Android 版本、freeform 支持、共享目录双向同步，加 `--apk 某应用.apk` 还会完整走一遍
-安装 → 独立窗口启动 → 前台确认 → 截图。
+---
 
-## 设计取舍（诚实说明）
+## 👨‍💻 Sobre o Autor
 
-- **不是从零实现的 hypervisor**：安卓内核、GPU 转译、ART 运行时是数年级别的工程，本项目选择站在 AOSP/QEMU/adb 的肩膀上，把工程量集中在「原生应用级体验」上——这正是应用宝电脑版、Google Play Games PC 版等产品共同的架构思路。
-- **共享目录是同步而非挂载**：Windows 无 root 时无法在安卓侧挂载 NTFS 目录，采用秒级双向同步达到同等体验。
-- **ARM-only 应用 / 字节系应用**：设置里开启「ARM 兼容模式」即可切换到 **Android 14（API 34）Google Play 镜像**（内置新版 ndk_translation 翻译层），仅含 ARM 原生库的应用可以安装运行。**实测红果免费短剧（com.phoenix.read，arm64-v8a-only）可正常安装、进入推荐流并播放视频**——旧版 API 30 镜像上会因字节系自带非标准 signal handler 触发翻译层保护性断言（`DoBadTrampoline` SIGABRT），Android 14 镜像的新版翻译层已修复。个别应用自带更深的反模拟检测（如强制校验真实传感器/基带），仍可能受限；安装失败或启动崩溃时 ApkStart 会给出中文说明。
+Desenvolvido e mantido por **Emerson Teles** (conhecido na comunidade como **Emertels**).
 
-| 兼容模式下运行红果免费短剧（Android 14 · AEHD 硬件加速） |
-|:---:|
-| ![红果短剧在 ApkStart 兼容模式运行](docs/images/compat-hongguo-playing.png) |
+Entusiasta de tecnologia, informática, jogos, manutenção de sistemas e tradução/localização de softwares para Português do Brasil (PT-BR). Desenvolvedor focado em utilitários práticos, ferramentas de produtividade, automação inteligente em PowerShell e soluções completas de localização técnica que aproximam ferramentas modernas do público brasileiro.
 
-### 提示「未启用硬件加速」怎么办
+### 🛠️ Projetos & Contribuições
 
-安卓模拟器在 Windows 上只有两条加速路：
+- [AI-Chat-Vault](https://github.com/Emertels/AI-Chat-Vault) — Backup portátil e recuperação de conversas locais de 20+ ferramentas e assistentes de IA.
+- [Antigravity — Tradução PT-BR](https://github.com/Emertels/Antigravity-Traducao-PTBR) — Localização completa do Google Antigravity Desktop para Português do Brasil.
+- [ApkStart PT-BR](https://github.com/Emertels/apkstart) — Inicializador ultraleve de apps Android para Windows com Modo Escuro e interface traduzida.
+- [Codex Router — Tradução PT-BR](https://github.com/Emertels/CodexRouter-Traducao-PTBR) — Pacote de tradução e localização do Codex Router Control Center em PT-BR.
+- [Cursor AI — Tradução PT-BR](https://github.com/Emertels/Cursor-Traducao-PTBR) — Localização completa e profunda do Cursor AI para Português do Brasil.
+- [Devin AI — Tradução PT-BR](https://github.com/Emertels/Devin-Traducao-PTBR) — Tradução e localização completa do Devin Desktop para Português do Brasil.
+- [GPU Tweak III — Tradução PT-BR](https://github.com/Emertels/GPU-Tweak-III-Traducao-PTBR) — Tradução em português brasileiro e instalador automatizado para ASUS GPU Tweak III.
+- [ICSee Desktop Viewer](https://github.com/Emertels/ICSee-Desktop-Viewer) — Aplicativo desktop moderno e portátil para visualização e controle de câmeras ICSee e ONVIF no Windows.
+- [Microsoft Photos Fix](https://github.com/Emertels/Microsoft-Photos-Fix) — Solução definitiva em PowerShell e C# para rota de inicialização rápida e visualização no app Fotos do Windows.
+- [PSBBN-Translator](https://github.com/Emertels/PSBBN-Translator) — Suíte corporativa de tradução e localização para o PSBBN Definitive Project (PlayStation 2) em 40 idiomas.
+- [Silent Hill: Homecoming — Tradução PT-BR](https://github.com/Emertels/Silent-Hill-Homecoming-Traducao-PTBR) — Tradução e revisão completa do jogo para PC em português brasileiro.
+- [Suite-Emuladores](https://github.com/Emertels/Suite-Emuladores) — Suíte inteligente em PowerShell para download e atualização autônoma de 56 emuladores e frontends no Windows.
+- [Xbox 360 Controller Calibration Tool](https://github.com/Emertels/Xbox-360-Controller-Calibration-Tool) — Ferramenta profissional para calibração avançada de controles Xbox 360 no Windows.
+- [ZCode — Tradução PT-BR](https://github.com/Emertels/ZCode-Traducao-PTBR) — Tradução e localização completa do ZCode Desktop para Português do Brasil.
 
-| 方式 | 是什么 | 谁需要管理员 | 装完要重启吗 |
-|---|---|---|---|
-| **WHPX** | Windows 自带功能「Windows 虚拟机监控程序平台」 | 开这个功能时 | 要 |
-| **AEHD** | Google 自家内核驱动 | 装驱动时 | 不用 |
+### 🌐 Conecte-se comigo & Comunidades Oficiais
 
-- **安装版 / 便携版**：设置 → 环境自检 → 「未启用硬件加速」右侧点**修复**，会弹一次 UAC，自动开 WHPX；如果开不起来（系统不支持 / 你点了否），会自动改装 AEHD 驱动。
-- **微软商店（MSIX）版**：商店应用**不能自行提权**，所以点「修复」会直接帮你打开「启用或关闭 Windows 功能」对话框，勾选
-  **「Windows 虚拟机监控程序平台」**（英文 HypervisorPlatform），确定后**重启电脑**一次即可。
+<div align="left">
 
-  也可以自己用管理员 PowerShell 跑：
+[![GitHub](https://img.shields.io/badge/GitHub-Emertels-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/emertels)
+[![Website](https://img.shields.io/badge/Website-Emerson_Teles-0070F3?style=for-the-badge&logo=googlechrome&logoColor=white)](https://emertels.github.io)
+[![Discord](https://img.shields.io/badge/Discord-Emertels%20Server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://emertels.github.io/discord)
+[![X / Twitter](https://img.shields.io/badge/X_Twitter-@emertels-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/emertels)
+[![YouTube](https://img.shields.io/badge/YouTube-Emerson_Teles-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@emersonteles2379)
+[![Telegram](https://img.shields.io/badge/Telegram-Aplicativos%20Mods-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/apksmodsandroid)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Apoiar%20Projeto-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/emertels)
 
-  ```powershell
-  dism /online /enable-feature /featurename:HypervisorPlatform /all /norestart
-  dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-  ```
-
-> 注意别只开「虚拟机平台（VirtualMachinePlatform）」——那是 WSL2 要用的，模拟器要的是
-> **「虚拟机监控程序平台（HypervisorPlatform）」**。只开前者，`emulator -accel-check` 依然会说不可用。
->
-> 没加速也能跑（纯软件模拟），只是开机会慢到几分钟——这也是应用里那条提示的目的，
-> 不是启动失败。
-
-### 桌面图标不对 / 显示成 ApkStart 的图标怎么办
-
-每个安卓应用的桌面快捷方式都应该用它**自己的图标**（安装时从 APK 里解出来存到
-`%APPDATA%\apkstart\icons\<包名>.ico`）。如果显示成了 ApkStart 的绿色播放键，或者干脆是空白图标：
-
-1. **设置 → 系统集成 → 重建快捷方式**（会把桌面和开始菜单的快捷方式按当前应用清单重写一遍，
-   连同图标和任务栏身份一起修好）；
-2. 还不行就删掉那个快捷方式，在 ApkStart 里右键应用 → 重新创建快捷方式/重装一次。
-
-> 为什么会坏：早期版本整理图标时把这些 `.lnk` 图标的 `IconLocation` 统一指向了 ApkStart 的品牌图；
-> 另外把便携版整个目录挪到别处后，`.lnk` 里记的绝对路径也会失效。重建一次即可。
->
-> 顺带说一句：每个应用的快捷方式都带自己的 AppUserModelID，
-> 所以**固定到任务栏**后，任务栏按钮和固定项用的是同一个应用图标，不会混成 ApkStart。
-
-### 为什么我的 `adb devices` 看不到这台安卓设备
-
-ApkStart 的 adb 服务跑在**专用端口 5044**，和系统里你自己的 adb（5037）完全隔开 —— 这样你的 Android Studio / scrcpy 不会跟它抢设备，它也不会误杀你手动开的模拟器。
-
-要用命令行连它：
-
-```powershell
-$env:ANDROID_ADB_SERVER_PORT = 5044
-adb devices              # 会看到 emulator-5554
-```
-
-⚠️ **不要**对着 `5555` 端口手动 `adb connect`：Play 版系统镜像会弹「允许 USB 调试吗」的系统对话框，而且它会盖在正在运行的安卓应用上，看起来像是程序出了问题。
-
-## 关于作者
-
-ApkStart 由 **RoutineMiku** 开发维护。
-
-- GitHub：<https://github.com/RoutineMiku/apkstart>
-- 微信公众号：扫码关注
-
-<p align="center"><img src="docs/images/brand.png" alt="关于面板：公众号二维码与项目链接" width="560" /></p>
-
-<p align="center"><i>Powered by <b>RoutineMiku</b></i></p>
-
-## 参与贡献
-
-欢迎 Issue / PR。壳层保持零第三方依赖，提交前请跑 `npm test`；细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-## 许可证
-
-[MIT](LICENSE)。发行包只含 ApkStart 自身代码与 Electron 运行时，不分发安卓系统镜像、QEMU 二进制或 Google 组件；这些由用户本机首次启动时从官方源按需下载，遵循各自的许可协议。
+</div>

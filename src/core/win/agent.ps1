@@ -365,6 +365,19 @@ public class ApkAgent
         EnumWindows(delegate(IntPtr h, IntPtr p)
         {
             if (!IsWindowVisible(h)) return true;
+            uint owner;
+            GetWindowThreadProcessId(h, out owner);
+            if (IsOurs(owner))
+            {
+                string title = TitleOf(h);
+                if (title.IndexOf("Saving state", StringComparison.OrdinalIgnoreCase) >= 0
+                    || title.IndexOf("Salvando", StringComparison.OrdinalIgnoreCase) >= 0
+                    || title.IndexOf("Loading state", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    ShowWindow(h, 0);
+                    return true;
+                }
+            }
             string cls = ClassOf(h);
             if (cls.IndexOf("QWindowTool", StringComparison.Ordinal) < 0) return true;
             // QWindowToolSaveBits is what Qt uses for menus, tooltips and popup panels --
@@ -513,6 +526,16 @@ public class ApkAgent
             uint pid;
             GetWindowThreadProcessId(h, out pid);
             if (!IsOurs(pid)) return true;
+
+            string title = TitleOf(h);
+            if (title.IndexOf("Saving state", StringComparison.OrdinalIgnoreCase) >= 0
+                || title.IndexOf("Salvando", StringComparison.OrdinalIgnoreCase) >= 0
+                || title.IndexOf("Loading state", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                ShowWindow(h, 0);
+                return true;
+            }
+
             string cls = ClassOf(h);
             // 只藏明确的弹窗类：Qt 提示窗 / 对话框 / 控制台。
             // 绝不碰 QWindowIcon / subWin —— 那是正在嵌入的 LCD，藏掉就全黑且点击失效。

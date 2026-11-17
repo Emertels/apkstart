@@ -2372,7 +2372,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
       '要能预判「这次会重启」');
     assert(/if \(this\.detachedMode && !this\._showWhileWaiting\) return;/.test(appwin),
       'ready-to-show 只在 showWhileWaiting 时才显示壳窗口');
-    assert(/正在为《[\s\S]{0,40}切换到/.test(mainJs), '提示文案要说清为什么慢');
+    assert(/(?:正在为《[\s\S]{0,40}切换到|Ajustando tela para)/i.test(mainJs), '提示文案要说清为什么慢');
   });
 
   await test('标题要在 show 之前设，否则会闪上一个应用的名字', () => {
@@ -2475,8 +2475,8 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     // 3) 商店（MSIX）版：拿不到提权就退回「手动引导」，而不是弹一个注定失败的 UAC
     assert(/if \(store\.STORE_BUILD\) \{[\s\S]{0,900}manual: true/.test(handlerBody),
       '商店版失败时要返回 manual 交给 UI 引导');
-    assert(/商店版无法自行提权/.test(mainJs), '商店版文案要说明为什么不能自动开');
-    assert(/虚拟机监控程序平台/.test(mainJs), '要明确写出「Windows 虚拟机监控程序平台」');
+    assert(/(?:商店版无法自行提权|A versão da Loja não pode)/i.test(mainJs), '商店版文案要说明为什么不能自动开');
+    assert(/(?:虚拟机监控程序平台|Plataforma de Hipervisor do Windows)/i.test(mainJs), '要明确写出「Windows 虚拟机监控程序平台」');
     // 4) 开启成功后必须清掉加速缓存，否则界面还显示旧结论
     assert(/const whpx = await enableWhpxFeatures\(\);\s*\n\s*runtime\.provisioner\.invalidateEnvCache/.test(mainJs),
       '开启后要 invalidateEnvCache');
@@ -2489,7 +2489,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(/openWindowsFeatures: \(\) => invoke\('provision:openWindowsFeatures'\)/.test(preloadJs),
       'preload 要暴露 openWindowsFeatures');
     // 8) 软件模拟下第一次启动要弹一次系统通知（设置里的自检项用户很可能没看到）
-    assert(/let accelWarned = false;/.test(mainJs) && /正在以软件模拟运行/.test(mainJs),
+    assert(/let accelWarned = false;/.test(mainJs) && /(?:正在以软件模拟运行|Executando via emulação por software)/i.test(mainJs),
       '软件模拟要提醒一次');
   });
 
