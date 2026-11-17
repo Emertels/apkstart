@@ -9,25 +9,33 @@ function applyTheme(theme) {
 
 function initTheme() {
   let saved = 'dark';
-  try { saved = localStorage.getItem('apkstart_theme') || 'dark'; } catch (_) {}
+  try {
+    const s = localStorage.getItem('apkstart_theme');
+    if (s === 'light' || s === 'dark') saved = s;
+  } catch (_) {}
   applyTheme(saved);
 
   const bindToggle = () => {
     const btn = document.getElementById('btnThemeToggle');
     if (btn) {
       btn.onclick = (e) => {
-        if (e) e.stopPropagation();
+        if (e) { e.preventDefault(); e.stopPropagation(); }
         const cur = document.documentElement.getAttribute('data-theme') || 'dark';
         const next = cur === 'dark' ? 'light' : 'dark';
         applyTheme(next);
       };
+      btn.addEventListener('click', (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = cur === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+      });
     }
   };
 
+  bindToggle();
   if (document.readyState === 'loading') {
     window.addEventListener('DOMContentLoaded', bindToggle);
-  } else {
-    bindToggle();
   }
 }
 initTheme();
@@ -1109,7 +1117,11 @@ async function refreshDataInfo() {
 }
 
 async function openSettings() {
-  $('settingsMask').classList.add('on');
+  const mask = $('settingsMask');
+  if (mask) {
+    mask.hidden = false;
+    mask.classList.add('on');
+  }
   try {
     state.settings = await api.getSettings();
     fillSettings(state.settings);
@@ -1925,7 +1937,32 @@ function bindEvents() {
     api.openExternal(a.getAttribute('href'));
   });
 
-  $('btnSettings').addEventListener('click', openSettings);
+  const btnSet = $('btnSettings');
+  if (btnSet) {
+    btnSet.onclick = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      openSettings();
+    };
+    btnSet.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      openSettings();
+    });
+  }
+
+  const btnTheme = $('btnThemeToggle');
+  if (btnTheme) {
+    btnTheme.onclick = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(cur === 'dark' ? 'light' : 'dark');
+    };
+    btnTheme.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(cur === 'dark' ? 'light' : 'dark');
+    });
+  }
+
   // 状态标签也当入口：点「需要部署 / 引导中 / Android 14」直接进设置的运行时面板
   $('engineTag').addEventListener('click', () => showSetup(true));
   $('btnCloseSettings').addEventListener('click', closeSettings);

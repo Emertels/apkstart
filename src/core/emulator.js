@@ -712,6 +712,8 @@ class EmulatorEngine {
       args.push('-snapshot', SNAPSHOT_NAME);
       // 网络自愈要求这次冷启动：快照可能是在「没网」时存的，恢复出来依旧没网。
       if (!this.hasSnapshot() || this._coldBoot) args.push('-no-snapshot-load');
+      // Evita o pop-up "Saving state..." e crashes de violação de acesso na finalização do QEMU
+      args.push('-no-snapshot-save');
     } else {
       args.push('-no-snapshot');
     }

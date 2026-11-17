@@ -732,13 +732,13 @@ function createWindow({ show = true } = {}) {
   mainWindow.loadFile(path.join(__dirname, 'ui', 'index.html'));
   if (show) mainWindow.once('ready-to-show', () => mainWindow.show());
 
-  // 冒烟测试时把渲染进程的报错打到 stdout：界面空白、按钮点了没反应，
-  // 十有八九是 app.js 里某个 id 改动后抛了异常，正常运行看不到。
-  if (process.argv.includes('--smoke')) {
-    mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
-      if (level >= 2) console.log(`[renderer] ${message} (${String(source).split('/').pop()}:${line})`);
-    });
-  }
+  // Encaminha erros e logs do renderer para app.log para depuração facilitada
+  mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
+    if (level >= 2) appLog(`[renderer:${level}] ${message} (${String(source).split('/').pop()}:${line})`);
+    if (process.argv.includes('--smoke') && level >= 2) {
+      console.log(`[renderer] ${message} (${String(source).split('/').pop()}:${line})`);
+    }
+  });
 
   // 外链一律交给系统浏览器（公众号/GitHub 等），绝不把应用窗口导航走
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
