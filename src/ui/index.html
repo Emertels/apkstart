@@ -333,6 +333,11 @@
               <option value="12">12 GB</option>
               <option value="16">16 GB</option>
               <option value="24">24 GB</option>
+              <option value="32">32 GB</option>
+              <option value="48">48 GB</option>
+              <option value="64">64 GB (Jogos de 50GB)</option>
+              <option value="96">96 GB</option>
+              <option value="128">128 GB</option>
             </select>
           </div>
         </div>
@@ -344,6 +349,25 @@
         </div>
         <div class="field">
           <span class="sub" id="dataNote">Lendo informações de armazenamento…</span>
+        </div>
+        <div class="field">
+          <label>Idioma do Sistema</label>
+          <select id="setLocale">
+            <option value="pt-BR">Português (Brasil) (Recomendado)</option>
+            <option value="en-US">English</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="ja-JP">日本語</option>
+            <option value="ko-KR">한국어</option>
+          </select>
+          <span class="sub">Idioma das configurações do sistema, popups de permissão e formato de data. Injetado na máquina virtual na inicialização (<b>tem efeito na próxima reinicialização</b>). O teclado chinês pode ser ativado separadamente abaixo.</span>
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Teclado / Método de Entrada Chinês</label>
+            <span class="sub">A imagem Android original inclui apenas teclado em inglês. Marcar esta opção instala e ativa silenciosamente o Google Pinyin IME para digitação em chinês. Desmarque para manter apenas o teclado padrão.</span>
+          </div>
+          <input type="checkbox" id="setChineseIme" class="switch" />
         </div>
         <div class="field switch-field">
           <div>
@@ -442,29 +466,53 @@
         </details>
       </div>
 
+            <div class="group" id="preflightGroup">
+        <div class="group-title">Diagnóstico do Sistema · Auto-Configuração</div>
+        <div class="field">
+          <span class="sub">Verifica em tempo real seu hardware: virtualização da CPU (VT-x / SVM), status do Hipervisor do Windows (WHPX), placa de vídeo, VRAM e versão do sistema. Aplica configurações ideais (RAM, núcleos e renderizador) e gera um perfil de compatibilidade seguro com 1 clique.</span>
+        </div>
+        <div class="field">
+          <div class="row">
+            <button class="btn primary sm" id="btnPreflight">Iniciar Diagnóstico</button>
+            <button class="btn ghost sm" id="btnPreflightApply" hidden>Aplicar Configurações Recomendadas</button>
+          </div>
+        </div>
+        <div id="preflightList" class="drv-list"></div>
+        <div class="field">
+          <span class="sub" id="preflightSummary"></span>
+        </div>
+      </div>
+
+      <div class="group" id="driverGroup">
+        <div class="group-title">Perfis de Compatibilidade de Hardware</div>
+        <div class="field">
+          <span class="sub">Algumas máquinas exigem ajustes finos para inicialização gráfica (GPUs integradas antigas, aceleração por software, etc.). Os perfis aplicam apenas parâmetros seguros da lista de permissões, sem executar código externo.</span>
+        </div>
+        <div class="field">
+          <span class="sub" id="drvSummary">Carregando perfis...</span>
+        </div>
+        <div id="drvList" class="drv-list"></div>
+        <div class="field">
+          <div class="row">
+            <button class="btn ghost sm" id="btnDrvReload">Atualizar</button>
+            <button class="btn ghost sm" id="btnDrvImport">Importar Perfil…</button>
+            <button class="btn ghost sm" id="btnDrvFolder">Abrir Pasta de Perfis</button>
+            <button class="btn ghost sm" id="btnDrvExport">Exportar Perfil do Meu PC</button>
+          </div>
+          <span class="sub">A opção "Exportar Perfil do Meu PC" gera um arquivo ajustado para o seu hardware atual.</span>
+        </div>
+      </div>
+
       <details class="advanced-group">
         <summary>Parâmetros Avançados (Geralmente não requer alteração)</summary>
       <div class="group">
         <div class="group-title">Runtime</div>
         <div class="field">
-          <label>Modo de Motor de Execução</label>
-          <select id="setEngineMode">
-            <option value="builtin">Runtime Integrado (Recomendado, QEMU + Android-x86, sem dependências externas)</option>
-            <option value="mumu">MuMu Player 12 (Reutiliza o emulador instalado no computador)</option>
-            <option value="fydeos">Subsistema FydeOS (Instalado no computador ou em VM VMware/VirtualBox)</option>
-            <option value="attach">Conectar a Runtime Existente (Avançado: reutiliza porta ADB do WSA ou outro emulador)</option>
-          </select>
-          <span class="sub">O Runtime Integrado baixa e roda sua própria imagem Android isolada. Ao escolher um emulador terceiro, o ApkStart controla o emulador já instalado no seu PC.</span>
-        </div>
-        <div class="field" id="fydeosHostField" hidden>
-          <label>Endereço do Subsistema FydeOS</label>
-          <input id="setFydeosHost" type="text" placeholder="127.0.0.1:5555 ou IP_da_VM:5555" />
-          <span class="sub">Obrigatório se o FydeOS rodar em VM (VMware/VirtualBox). Use redirecionamento de porta 5555->5555 e informe <b>127.0.0.1:5555</b>. Se o FydeOS for o sistema operacional nativo da máquina, deixe em branco.</span>
-        </div>
-        <div class="field" id="mumuPathField" hidden>
-          <label>Pasta de Instalação do MuMu (Em branco = detecção automática)</label>
-          <input id="setMumuPath" type="text" placeholder="Ex: D:\MuMu Player 12" />
-          <span class="sub">Detecta o MuMuManager.exe automaticamente no registro do Windows; se instalado em pasta personalizada, informe aqui.</span>
+          <label>Motor do Sistema</label>
+          <div class="row">
+            <input id="setEngineLabel" type="text" readonly value="Motor Nativo ApkStart (QEMU + Android 14, 100% autônomo)" />
+          </div>
+          <span class="sub">O ApkStart opera com runtime próprio: adb, emulator e imagem do sistema são gerenciados de forma 100% isolada, sem depender de emuladores de terceiros.</span>
         </div>
         <div class="field">
           <label>Caminho do ADB</label>
@@ -472,10 +520,7 @@
         </div>
         <div class="field">
           <label>Endereço do Dispositivo ADB</label>
-          <div class="row">
-            <input id="setDevice" type="text" placeholder="127.0.0.1:58526" />
-            <button class="btn ghost sm" id="btnProbe">Detectar</button>
-          </div>
+          <span class="sub" id="deviceAddrNote">Atribuído dinamicamente pelo ApkStart (porta 5044/5554 dedicada), sem necessidade de preenchimento.</span>
         </div>
         <div class="field">
           <label>Imagem do Sistema (ISO / IMG)</label>
@@ -490,6 +535,9 @@
             <label>Núcleos de CPU (0 = Automático)</label>
             <input id="setCores" type="number" min="0" max="16" />
           </div>
+        </div>
+        <div class="field">
+          <span class="sub" id="builtinResNote"></span>
         </div>
         <div class="field">
           <label>Liberar Ocioso (Minutos, 0 = Nunca)</label>

@@ -11,6 +11,7 @@
  */
 const zlib = require('zlib');
 const fs = require('fs');
+const path = require('path');
 
 const EOCD_SIG = 0x06054b50;
 const CEN_SIG = 0x02014b50;
@@ -103,7 +104,7 @@ class ZipArchive {
     for (let i = buf.length - 22; i >= maxScan; i--) {
       if (buf.readUInt32LE(i) === EOCD_SIG) { eocd = i; break; }
     }
-    if (eocd < 0) throw new Error('Arquivo ZIP/APK inválido (EOCD não encontrado)');
+    if (eocd < 0) throw new Error('不是有效的 ZIP/APK 文件（未找到 EOCD）');
 
     const { total, cdOffset } = readEndOfCentralDirectory(buf, eocd, 0);
     let offset = cdOffset;
@@ -144,18 +145,18 @@ class ZipArchive {
     const e = this.entries.get(name);
     if (!e) return null;
     const buf = this.buf;
-    if (e.localOffset + 30 > buf.length) throw new Error(`Cabeçalho local de arquivo fora do limite: ${name}`);
+    if (e.localOffset + 30 > buf.length) throw new Error(`本地文件头越界: ${name}`);
     if (buf.readUInt32LE(e.localOffset) !== LOC_SIG) {
-      throw new Error(`Cabeçalho local de arquivo corrompido: ${name}`);
+      throw new Error(`本地文件头损坏: ${name}`);
     }
     const nameLen = buf.readUInt16LE(e.localOffset + 26);
     const extraLen = buf.readUInt16LE(e.localOffset + 28);
     const start = e.localOffset + 30 + nameLen + extraLen;
-    if (start + e.compSize > buf.length) throw new Error(`Dados do item fora do limite: ${name}`);
+    if (start + e.compSize > buf.length) throw new Error(`条目数据越界: ${name}`);
     const raw = buf.subarray(start, start + e.compSize);
     if (e.method === 0) return Buffer.from(raw);
     if (e.method === 8) return zlib.inflateRawSync(raw);
-    throw new Error(`Método de compactação não suportado ${e.method}: ${name}`);
+    throw new Error(`不支持的压缩方式 ${e.method}: ${name}`);
   }
 
   /** 列出匹配某个前缀/正则的条目名 */
@@ -170,10 +171,10 @@ class ZipArchive {
    */
   pipeTo(name, dest) {
     const e = this.entries.get(name);
-    if (!e) return Promise.reject(new Error(`Item não existe: ${name}`));
+    if (!e) return Promise.reject(new Error(`条目不存在: ${name}`));
     const buf = this.buf;
     if (buf.readUInt32LE(e.localOffset) !== LOC_SIG) {
-      return Promise.reject(new Error(`Cabeçalho local corrompido: ${name}`));
+      return Promise.reject(new Error(`本地文件头损坏: ${name}`));
     }
     const nameLen = buf.readUInt16LE(e.localOffset + 26);
     const extraLen = buf.readUInt16LE(e.localOffset + 28);
@@ -189,7 +190,7 @@ class ZipArchive {
         dest.end(raw);
         return;
       }
-      if (e.method !== 8) return done(new Error(`Método de compactação não suportado ${e.method}: ${name}`));
+      if (e.method !== 8) return done(new Error(`不支持的压缩方式 ${e.method}: ${name}`));
 
       const inflater = zlib.createInflateRaw();
       // 分片喂入，避免一次性把 GB 数据塞进 zlib 缓冲区
@@ -249,7 +250,7 @@ class ZipFile {
   }
 
   _parse() {
-    if (this.size < 22) throw new Error('Arquivo ZIP/APK inválido (arquivo muito pequeno)');
+    if (this.size < 22) throw new Error('不是有效的 ZIP/APK 文件（文件过小）');
     const tailLen = Math.min(this.size, 22 + 65557 + 4096);
     const tailBase = this.size - tailLen;
     const tail = this._readAt(tailBase, tailLen);
@@ -257,11 +258,11 @@ class ZipFile {
     for (let i = tail.length - 22; i >= 0; i -= 1) {
       if (tail.readUInt32LE(i) === EOCD_SIG) { eocd = i; break; }
     }
-    if (eocd < 0) throw new Error('Arquivo ZIP/APK inválido (EOCD não encontrado)');
+    if (eocd < 0) throw new Error('不是有效的 ZIP/APK 文件（未找到 EOCD）');
 
     const { total, cdSize, cdOffset, eocdAbs } = readEndOfCentralDirectory(tail, eocd, tailBase);
     if (cdOffset + cdSize > this.size) {
-      throw new Error('Deslocamento do diretório central do ZIP inválido');
+      throw new Error('ZIP 中央目录偏移异常');
     }
 
     let cd = tail;
@@ -269,7 +270,7 @@ class ZipFile {
     if (cdOffset < tailBase || cdOffset + cdSize > eocdAbs) {
       // 中央目录不在尾部缓冲里（超大注释 / 多分卷），按声明大小精确读一段
       const len = Math.min(cdSize, 256 * 1024 * 1024);
-      if (len <= 0) throw new Error('Deslocamento do diretório central do ZIP inválido');
+      if (len <= 0) throw new Error('ZIP 中央目录偏移异常');
       cd = this._readAt(cdOffset, len);
       cdBase = cdOffset;
     }
@@ -309,9 +310,9 @@ class ZipFile {
 
   _range(name) {
     const e = this.entries.get(name);
-    if (!e) throw new Error(`Item não encontrado: ${name}`);
+    if (!e) throw new Error(`条目不存在: ${name}`);
     const head = this._readAt(e.localOffset, 30);
-    if (head.length < 30 || head.readUInt32LE(0) !== LOC_SIG) throw new Error(`Cabeçalho local de arquivo corrompido: ${name}`);
+    if (head.length < 30 || head.readUInt32LE(0) !== LOC_SIG) throw new Error(`本地文件头损坏: ${name}`);
     const nameLen = head.readUInt16LE(26);
     const extraLen = head.readUInt16LE(28);
     const start = e.localOffset + 30 + nameLen + extraLen;
@@ -323,13 +324,13 @@ class ZipFile {
     // read() 会把整个条目解到内存：给一个明确上限，避免未来某个调用点顺手
     // 拿来读 GB 级镜像（那正是 issue #21 里「大包必炸」的形态）。
     if (e.compSize > MAX_READ) {
-      throw new Error(`Item muito grande (${(e.compSize / 1048576).toFixed(0)}MB), use pipeTo: ${name}`);
+      throw new Error(`条目过大（${(e.compSize / 1048576).toFixed(0)}MB），请改用 pipeTo: ${name}`);
     }
     const raw = this._readAt(start, e.compSize);
-    if (raw.length < e.compSize) throw new Error(`Dados do item truncados: ${name}`);
+    if (raw.length < e.compSize) throw new Error(`条目数据被截断: ${name}`);
     if (e.method === 0) return raw;
     if (e.method === 8) return zlib.inflateRawSync(raw);
-    throw new Error(`Método de compactação não suportado ${e.method}: ${name}`);
+    throw new Error(`不支持的压缩方式 ${e.method}: ${name}`);
   }
 
   pipeTo(name, dest) {
@@ -341,7 +342,7 @@ class ZipFile {
       dest.on('error', done);
       dest.on('finish', () => done(null));
       if (e.compSize === 0) { dest.end(); return undefined; }
-      if (e.method !== 0 && e.method !== 8) return done(new Error(`Método de compactação não suportado ${e.method}: ${name}`));
+      if (e.method !== 0 && e.method !== 8) return done(new Error(`不支持的压缩方式 ${e.method}: ${name}`));
       const src = fs.createReadStream(null, {
         fd: this.fd, autoClose: false, start, end: Math.max(start, end),
       });
@@ -354,4 +355,23 @@ class ZipFile {
   }
 }
 
-module.exports = { ZipArchive, ZipFile };
+/**
+ * 把 ZIP 条目名安全解析到 destDir 下，挡住 zip-slip（issue #2 P0-4）。
+ * 恶意包里的 "../evil"、绝对路径、盘符、"C:\..."、UNC 都必须在写盘前拒绝。
+ * 返回 null 表示该条目不可信，调用方应跳过。
+ */
+function resolveZipEntry(destDir, name) {
+  if (typeof name !== 'string' || !name) return null;
+  // 统一正斜杠后判断：反斜杠在 Windows 上同样是路径分隔符
+  const normalized = name.replace(/\\/g, '/');
+  if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized) || normalized.includes('\0')) return null;
+  const segments = normalized.split('/');
+  if (segments.some((s) => s === '..')) return null;
+  const root = path.resolve(destDir);
+  const target = path.resolve(root, ...segments.filter((s) => s && s !== '.'));
+  // path.resolve 可能因为盘符/挂载点把目标甩到根目录外，最后再核一次前缀边界
+  if (target !== root && !target.startsWith(root + path.sep)) return null;
+  return target;
+}
+
+module.exports = { ZipArchive, ZipFile, resolveZipEntry };

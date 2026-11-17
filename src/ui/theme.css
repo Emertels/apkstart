@@ -879,3 +879,68 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-color: #36463c !important;
   color: #2ee6a6 !important;
 }
+
+
+/* ============================================================================
+ * SUPORTE A DIAGNÓSTICO (PREFLIGHT) E DRIVERS NO MODO ESCURO (v0.5.8)
+ * ========================================================================== */
+
+[data-theme="dark"] .pf-item {
+  background: #18201b !important;
+  border-color: #2a372e !important;
+}
+
+[data-theme="dark"] .pf-title {
+  color: #e1ece5 !important;
+}
+
+[data-theme="dark"] .pf-detail {
+  color: #8ea196 !important;
+}
+
+[data-theme="dark"] .drv-item {
+  background: #18201b !important;
+  border-color: #2a372e !important;
+}
+
+[data-theme="dark"] .drv-item.on {
+  border-color: #12b886 !important;
+  box-shadow: 0 0 10px rgba(18, 184, 134, 0.15) !important;
+}
+
+[data-theme="dark"] .drv-name {
+  color: #e1ece5 !important;
+}
+
+[data-theme="dark"] .drv-meta {
+  color: #8ea196 !important;
+}
+
+[data-theme="dark"] .drv-badge {
+  background: #242f28 !important;
+  color: #8ea196 !important;
+}
+
+[data-theme="dark"] .drv-badge.hit {
+  background: #162e22 !important;
+  color: #2ee6a6 !important;
+  border: 1px solid rgba(46, 230, 166, 0.3) !important;
+}
+
+[data-theme="dark"] .drv-err {
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .advanced-group summary {
+  color: #2ee6a6 !important;
+}
+
+[data-theme="dark"] .advanced-group {
+  border-color: #2a372e !important;
+}
+
+[data-theme="dark"] input[readonly] {
+  background: #131915 !important;
+  color: #8ea196 !important;
+  border-color: #2a372e !important;
+}

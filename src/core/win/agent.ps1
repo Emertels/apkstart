@@ -41,7 +41,16 @@ public class ApkAgent
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SetWindowTextW(IntPtr h, string s);
+    // 给模拟器原生窗口设图标（独立窗口模式下任务栏/Alt+Tab 显示当前应用图标）
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadImageW(IntPtr inst, string file, uint type, int w, int h, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr SendMessageW(IntPtr h, uint msg, IntPtr wp, IntPtr lp);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
     [DllImport("user32.dll")] static extern IntPtr SetParent(IntPtr c, IntPtr p);
+    // 高 DPI：appwin.js 传来的是物理像素。不声明 DPI 感知时 Windows 会把它当逻辑像素再放大一次，
+    // 嵌入的模拟器窗口比宿主大（150% 缩放下大 1.5 倍）→ 画面右/下被裁、点击偏移（issue #40）。
+    [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr ctx);
+    [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] static extern IntPtr GetParent(IntPtr c);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
@@ -119,6 +128,10 @@ public class ApkAgent
     static volatile bool _perfMode = false;
     static volatile bool _detachedMode = false;
     static long _bootHideSweep = 0;
+    // 控制台黑窗专用扫描时间戳。emulator 拉起 qemu 时 Windows 会给这个控制台
+    // 新开一个窗口（Win11 上是 Windows Terminal），它只活 200~300ms；主巡检
+    // 250ms 一轮抓不稳，所以前 15 秒额外用更密的节奏单独扫一遍控制台类窗口。
+    static long _consoleSweep = 0;
     // 兜底超时：万一 embed 没来（用户只是打开了 ApkStart 没点应用），
     // 不能让 120ms 一轮的扫描永远跑下去白烧 CPU。每次真藏到窗口就续期。
     static long _bootHideUntil = 0;
@@ -271,6 +284,20 @@ public class ApkAgent
     // 所以这里不能再按 IsWindowVisible 过滤 —— 否则永远找不到可嵌入的窗口，
     // 用户看到的是一个全黑的应用窗口。改为「标题是 Android Emulator 就认，
     // 可见的大窗口优先」。工具栏 / 提示窗（QWindowTool）尺寸太小，被面积阈值挡掉。
+    //
+    // ApkStart 会把这个窗口的标题改成应用名（见 "title" 命令），所以识别时
+    // 必须同时认「改名后的标题」。用一个 volatile 字段记住我们设过的标题。
+    public static string _ourTitle = "";
+    // 应用图标文件路径：Qt 会在窗口重建时把图标改回默认绿机器人，巡检里持续补设。
+    public static string _ourIconFile = "";
+    public static IntPtr _ourIconSmall = IntPtr.Zero;
+    public static IntPtr _ourIconBig = IntPtr.Zero;
+    static bool LooksLikeEmulator(string title)
+    {
+        if (title.IndexOf("Android Emulator", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+        if (_ourTitle.Length > 0 && String.Equals(title, _ourTitle, StringComparison.Ordinal)) return true;
+        return false;
+    }
     static IntPtr FindEmulator()
     {
         IntPtr best = IntPtr.Zero;
@@ -286,7 +313,7 @@ public class ApkAgent
             string cls = ClassOf(h);
             if (cls.IndexOf("QWindowIcon", StringComparison.Ordinal) < 0) return true;
             string title = TitleOf(h);
-            bool named = title.IndexOf("Android Emulator", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool named = LooksLikeEmulator(title);
             if (!named && !IsWindowVisible(h)) return true;
             RECT r;
             if (!GetWindowRect(h, out r)) return true;
@@ -340,21 +367,24 @@ public class ApkAgent
             if (!IsWindowVisible(h)) return true;
             uint owner;
             GetWindowThreadProcessId(h, out owner);
-            if (!IsOurs(owner)) return true;
-
-            string title = TitleOf(h);
-            if (title.IndexOf("Saving state", StringComparison.OrdinalIgnoreCase) >= 0
-                || title.IndexOf("Salvando", StringComparison.OrdinalIgnoreCase) >= 0
-                || title.IndexOf("Loading state", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (IsOurs(owner))
             {
-                ShowWindow(h, 0);
-                return true;
+                string title = TitleOf(h);
+                if (title.IndexOf("Saving state", StringComparison.OrdinalIgnoreCase) >= 0
+                    || title.IndexOf("Salvando", StringComparison.OrdinalIgnoreCase) >= 0
+                    || title.IndexOf("Loading state", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    ShowWindow(h, 0);
+                    return true;
+                }
             }
-
             string cls = ClassOf(h);
             if (cls.IndexOf("QWindowTool", StringComparison.Ordinal) < 0) return true;
             // QWindowToolSaveBits is what Qt uses for menus, tooltips and popup panels --
             // WeChat's emoji panel / right-click menu included. Only hide our own.
+            uint owner;
+            GetWindowThreadProcessId(h, out owner);
+            if (!IsOurs(owner)) return true;
             RECT r;
             if (!GetWindowRect(h, out r)) return true;
             if ((r.R - r.L) > 200) return true;   // the framebuffer window also uses this class
@@ -391,10 +421,54 @@ public class ApkAgent
         // 那会把用户自己开的终端（标题是某个路径，比如 D://Android//emulator）也一起藏掉。
         // 现在只认两种证据：conhost 的父进程链能走到我们运行时目录里，
         // 或者标题里出现我们运行时目录的绝对路径（Windows 会把镜像路径当控制台标题）。
+        long now = Environment.TickCount;
         foreach (IntPtr h in consoles)
         {
-            if (IsOurConsole(h)) ShowWindow(h, 0);
+            if (IsOurConsole(h)) { ShowWindow(h, 0); continue; }
+            // 第三条证据（Windows 11 才有）：默认控制台宿主换成 Windows Terminal 之后，
+            // 模拟器给 qemu 新开的那个控制台窗口属于 WindowsTerminal.exe ——
+            // pid 不是我们的、父进程链走不到我们、标题还经常只是个 "Terminal"，
+            // 上面两条证据全都命中不了，于是每次开机都在屏幕上闪 200~300ms 的黑框。
+            // 这里用「开机前不存在 + 开机后 20 秒内出现 + 标题是空的/就是 Terminal」
+            // 三个条件一起认。用户自己新开的终端一般已经有标题（PowerShell、某个路径），
+            // 不会被误伤；退一步说，真误伤了也只是藏起来，不会关掉他的进程。
+            if (_bootHideStart != 0 && now - _bootHideStart < 20000
+                && !_consolesBeforeBoot.Contains(h.ToInt64()))
+            {
+                string t = TitleOf(h);
+                string tl = t.ToLowerInvariant();
+                // 标题实测会变：可能是空、可能是 "Terminal"、也可能是 "Windows Terminal"
+                // （取决于 WT 版本和它当时有没有拿到 shell 标题）。这里只要求「像个控制台
+                // 宿主」——空标题，或者标题里带 terminal。
+                // 用户自己已经开着的终端都在 _consolesBeforeBoot 里，不会被误伤；
+                // 真误伤了也只是藏起来，不会关掉他的进程。
+                bool plain = t.Length == 0 || tl.IndexOf("terminal", StringComparison.Ordinal) >= 0;
+                if (plain)
+                {
+                    ShowWindow(h, 0);
+                }
+            }
         }
+    }
+
+    // 记录「开机（boothide）那一刻已经存在的控制台窗口」。
+    // Windows Terminal 会把我们的 qemu 控制台塞进一个新窗口，而这个窗口从 pid /
+    // 父进程 / 标题都认不出归属；用「开机前没有、开机后冒出来」来认最可靠。
+    static System.Collections.Generic.HashSet<long> _consolesBeforeBoot =
+        new System.Collections.Generic.HashSet<long>();
+
+    static void SnapshotConsoles()
+    {
+        _consolesBeforeBoot.Clear();
+        EnumWindows(delegate(IntPtr h, IntPtr p)
+        {
+            if (!IsWindowVisible(h)) return true;
+            string cls = ClassOf(h);
+            if (cls.IndexOf("ConsoleWindowClass", StringComparison.Ordinal) >= 0
+                || cls.IndexOf("CASCADIA_HOSTING_WINDOW_CLASS", StringComparison.Ordinal) >= 0)
+                _consolesBeforeBoot.Add(h.ToInt64());
+            return true;
+        }, IntPtr.Zero);
     }
 
     // 诊断用：列出当前「可见」的控制台窗口（黑窗）及其归属，供 tools 里的验证脚本使用。
@@ -511,6 +585,19 @@ public class ApkAgent
         // 也不该按宿主客户区去 Fit。这里直接跳过所有压制逻辑。
         if (_detachedMode)
         {
+            // Qt 在分辨率变化/窗口重建时会把标题改回 "Android Emulator - ..."。
+            // 每轮巡检补设一次，保证任务栏里始终是 ApkStart（或应用名）。
+            if (_ourTitle.Length > 0 && _emu != IntPtr.Zero
+                && !String.Equals(TitleOf(_emu), _ourTitle, StringComparison.Ordinal))
+                SetWindowTextW(_emu, _ourTitle);
+            // Qt 换分辨率/重建窗口后图标会回到默认绿机器人，每轮补设一次。
+            // WM_GETICON 非零说明当前窗口已有我们设的图标，跳过；否则重发缓存句柄。
+            if (_emu != IntPtr.Zero && (_ourIconSmall != IntPtr.Zero || _ourIconBig != IntPtr.Zero)
+                && SendMessageW(_emu, 0x007F, new IntPtr(1), IntPtr.Zero) == IntPtr.Zero)
+            {
+                if (_ourIconSmall != IntPtr.Zero) SendMessageW(_emu, 0x0080, new IntPtr(0), _ourIconSmall);
+                if (_ourIconBig != IntPtr.Zero) SendMessageW(_emu, 0x0080, new IntPtr(1), _ourIconBig);
+            }
             HideConsoleWindows();
             HideStrayWindows();
             return;
@@ -1015,6 +1102,8 @@ public class ApkAgent
 
     public static void Serve(int port)
     {
+        // per-monitor v2（Win10 1703+），失败退回 system-aware
+        try { if (!SetProcessDpiAwarenessContext(new IntPtr(-4))) SetProcessDPIAware(); } catch { try { SetProcessDPIAware(); } catch { } }
         TcpListener l = new TcpListener(IPAddress.Loopback, port);
         l.Start();
         int actual = ((IPEndPoint)l.LocalEndpoint).Port;
@@ -1061,6 +1150,19 @@ public class ApkAgent
             {
                 _bootHideSweep = now;
                 QuietSweep();
+            }
+
+            // 控制台黑窗专用高频通道（只在前 15 秒、只枚举控制台类窗口）。
+            // 为什么需要：emulator 启动 qemu 时 Windows 会新建一个控制台窗口，
+            // 它的归属进程是 conhost / WindowsTerminal，IsOurs 为 false，只能靠
+            // IsOurConsole 的「标题 = 我们的运行时路径」来认。这类窗口只可见
+            // 200~300ms，250ms 一轮的主巡检有几率漏掉 —— 用户看到的就是开机时
+            // 闪一下黑框。这里 100ms 一轮，必然能在它消失前抓到。
+            if (_quiet && now - _bootHideStart < 15000
+                && now - _consoleSweep > (_perfMode ? 200 : 100))
+            {
+                _consoleSweep = now;
+                HideConsoleWindows();
             }
 
             try
@@ -1220,6 +1322,48 @@ public class ApkAgent
                         Detach();
                         Reply(sock, "{\"ok\":true,\"emu\":" + _emu.ToInt64() + "}");
                     }
+                    else if (cmd == "title")
+                    {
+                        // 把模拟器原生窗口的标题从 "Android Emulator - apkstart:5554"
+                        // 换成用户看得懂的名字（默认 "ApkStart"）。Qt 会在窗口重建时
+                        // 把标题改回去，所以 QuietSweep 每轮巡检都会补设一次（见下）。
+                        string t = S(line, "text");
+                        if (t.Length == 0) t = "ApkStart";
+                        _ourTitle = t;
+                        if (_emu == IntPtr.Zero) _emu = FindEmulator();
+                        bool ok = _emu != IntPtr.Zero && SetWindowTextW(_emu, t);
+                        Reply(sock, "{\"ok\":" + (ok ? "true" : "false") + "}");
+                    }
+                    else if (cmd == "icon")
+                    {
+                        // 给模拟器原生窗口设图标（独立窗口模式下任务栏/Alt+Tab 显示当前应用图标，
+                        // 而不是 Google 模拟器的默认绿机器人）。传 ICO/PNG 绝对路径。
+                        string f = S(line, "file");
+                        if (_emu == IntPtr.Zero) _emu = FindEmulator();
+                        bool ok = false;
+                        if (f.Length > 0 && System.IO.File.Exists(f))
+                        {
+                            // 缓存图标句柄：换应用时释放旧的、加载新的；巡检补设直接用缓存，
+                            // 不再每轮 LoadImage（那是磁盘 IO + GDI 对象泄漏）。
+                            if (!String.Equals(f, _ourIconFile, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (_ourIconSmall != IntPtr.Zero) DestroyIcon(_ourIconSmall);
+                                if (_ourIconBig != IntPtr.Zero) DestroyIcon(_ourIconBig);
+                                _ourIconSmall = LoadImageW(IntPtr.Zero, f, 1, 32, 32, 0x10);
+                                _ourIconBig = LoadImageW(IntPtr.Zero, f, 1, 64, 64, 0x10);
+                                if (_ourIconSmall == IntPtr.Zero) _ourIconSmall = _ourIconBig;
+                                if (_ourIconBig == IntPtr.Zero) _ourIconBig = _ourIconSmall;
+                                _ourIconFile = f;
+                            }
+                            if (_emu != IntPtr.Zero && (_ourIconSmall != IntPtr.Zero || _ourIconBig != IntPtr.Zero))
+                            {
+                                if (_ourIconSmall != IntPtr.Zero) SendMessageW(_emu, 0x0080, new IntPtr(0), _ourIconSmall);
+                                if (_ourIconBig != IntPtr.Zero) SendMessageW(_emu, 0x0080, new IntPtr(1), _ourIconBig);
+                                ok = true;
+                            }
+                        }
+                        Reply(sock, "{\"ok\":" + (ok ? "true" : "false") + "}");
+                    }
                     else if (cmd == "layout")
                     {
                         // 独立窗口模式：模拟器窗口是系统原生窗口，这里只把它摆到
@@ -1256,7 +1400,9 @@ public class ApkAgent
                         IntPtr e = FindEmulator();
                         RECT r = new RECT();
                         if (e != IntPtr.Zero) GetWindowRect(e, out r);
-                        Reply(sock, "{\"ok\":true,\"emu\":" + e.ToInt64() + ",\"w\":" + (r.R - r.L) + ",\"h\":" + (r.B - r.T) + "}");
+                        Reply(sock, "{\"ok\":true,\"emu\":" + e.ToInt64()
+                            + ",\"x\":" + r.L + ",\"y\":" + r.T
+                            + ",\"w\":" + (r.R - r.L) + ",\"h\":" + (r.B - r.T) + "}");
                     }
                     else if (cmd == "winready")
                     {
@@ -1292,7 +1438,9 @@ public class ApkAgent
                         {
                             _quiet = true;
                             _bootHideSweep = 0;
+                            _consoleSweep = 0;
                             _bootHideStart = Environment.TickCount;
+                            SnapshotConsoles();
                             QuietSweep();
                         }
                         else

@@ -40,7 +40,7 @@ class WinAgent extends EventEmitter {
   ensure() {
     if (this.ready) return this.ready;
     this.ready = new Promise((resolve, reject) => {
-      if (!this.available) { reject(new Error('Agente de janela indisponível')); return; }
+      if (!this.available) { reject(new Error('窗口代理不可用')); return; }
       let out = '';
       let settled = false;
       const proc = spawn('powershell.exe', [
@@ -73,11 +73,11 @@ class WinAgent extends EventEmitter {
         this.ready = null;
         this.hooked = false;
         this.hookConf = null;
-        this._failAll('Agente de janela finalizado');
+        this._failAll('窗口代理已退出');
         if (wasReady) this.emit('exit');
-        fail(new Error('Falha ao iniciar agente de janela'));
+        fail(new Error('窗口代理启动失败'));
       });
-      setTimeout(() => { if (!settled) fail(new Error('Tempo limite do agente de janela esgotado')); }, 15000);
+      setTimeout(() => { if (!settled) fail(new Error('窗口代理启动超时')); }, 15000);
     });
     return this.ready;
   }
@@ -92,7 +92,7 @@ class WinAgent extends EventEmitter {
       sock.on('close', () => {
         this.sock = null;
         this.ready = null;
-        this._failAll('Conexão com agente de janela perdida');
+        this._failAll('窗口代理连接断开');
       });
       this.sock = sock;
       this.buf = '';
@@ -127,9 +127,9 @@ class WinAgent extends EventEmitter {
   /** 发送一条命令并等待回包 */
   async call(obj, timeout = CALL_TIMEOUT) {
     await this.ensure();
-    if (!this.sock) throw new Error('Agente de janela não conectado');
+    if (!this.sock) throw new Error('窗口代理未连接');
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Tempo limite do agente de janela: ${obj.cmd}`)), timeout);
+      const timer = setTimeout(() => reject(new Error(`窗口代理超时: ${obj.cmd}`)), timeout);
       this.pending.push({ resolve, reject, timer });
       this.sock.write(`${JSON.stringify(obj)}\n`);
     });
@@ -206,6 +206,20 @@ class WinAgent extends EventEmitter {
       x: Math.round(rect.x), y: Math.round(rect.y),
       w: Math.round(rect.w), h: Math.round(rect.h),
     }, 4000);
+  }
+  /**
+   * 把模拟器原生窗口的标题从 "Android Emulator - apkstart:5554" 改成用户看得懂的名字。
+   * 传空串时默认 "ApkStart"。代理会在巡检里持续补设（Qt 偶尔会自己改回去）。
+   */
+  async setTitle(text = 'ApkStart') {
+    return this.call({ cmd: 'title', text: String(text || 'ApkStart') }, 4000);
+  }
+  /**
+   * 给模拟器原生窗口设图标（独立窗口模式下任务栏/Alt+Tab 显示当前应用图标）。
+   * @param {string} file PNG/ICO 绝对路径
+   */
+  async setIcon(file) {
+    return this.call({ cmd: 'icon', file: String(file || '') }, 4000);
   }
   async probe() { return this.call({ cmd: 'probe' }, 4000); }
   /** 列出当前可见的顶层窗口（用于验证「只有软件界面 / 只有安卓应用窗口」） */

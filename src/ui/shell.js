@@ -25,11 +25,15 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'F11') { e.preventDefault(); api.shell.maximize(); }
   else if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); api.shell.back(); }
   else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); api.shell.forward(); }
+  else {
+    // 其余按键转发给主进程的按键映射引擎（游戏手柄/键盘→触屏）
+    api.shell.keyEvent(e.key).catch(() => {});
+  }
 });
 
 function applyState(s) {
   if (!s) return;
-  $('appName').textContent = s.label || 'Aplicativo';
+  $('appName').textContent = s.label || '应用';
   $('bootName').textContent = s.label || '';
   const icon = s.iconUrl || '';
   if (icon) {

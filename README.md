@@ -1,4 +1,4 @@
-# 🚀 ApkStart PT-BR
+# 🚀 ApkStart PT-BR v0.5.8
 
 <p align="center">
   <b>🇧🇷 Português</b> | <a href="README.en.md">🇺🇸 English</a>
@@ -17,9 +17,14 @@ Um aplicativo desktop moderno, ultraleve, portátil e de alto desempenho para Wi
 ## ✨ Principais Funcionalidades
 
 - **🖱️ Instalação com Dois Cliques no `.apk`:** Associe arquivos `.apk` ao ApkStart para instalar aplicativos com dois cliques direto do Explorador de Arquivos do Windows, sem necessidade de abrir interfaces de emuladores pesados.
+- **🧩 Motor 100% Autônomo e Standalone (v0.5.8):** A versão 0.5.8 elimina qualquer dependência de emuladores externos de terceiros. Inclui seu próprio runtime Android x86_64 otimizado, inicialização instantânea e isolamento completo.
+- **🩺 Diagnóstico Pré-Voo de Hardware (Preflight):** Verificação inteligente em tempo real da virtualização na BIOS (VT-x/SVM), Hyper-V / WHPX, integridade do sistema operacional, memória RAM e detecção do fabricante de GPU (NVIDIA / AMD / Intel).
+- **🎮 Perfis e Drivers de Compatibilidade de GPU:** Gerenciamento nativo de perfis de driver para contornar falhas gráficas, com backend selecionável (Host, ANGLE Direct3D 11, SwiftShader) e isolamento seguro.
+- **🧠 Alocação Dinâmica e Conservadora de Recursos:** Sistema de dimensionamento automático de vCPU, memória RAM e disco que impede que o Android sobrecarregue ou congele o Windows.
 - **📱 Atalhos Reais na Área de Trabalho e Menu Iniciar:** O ícone do aplicativo é extraído em alta definição e transformado em atalho na Área de Trabalho. Clicar nele abre diretamente o aplicativo desejado.
 - **🪟 Janelas Individuais e Independentes:** Cada app é executado em uma janela própria, redimensionável, que memoriza seu tamanho anterior, suporta modo tela cheia (`F11`) e rotação instantânea entre modo retrato e paisagem (`Ctrl + R`).
-- **🌙 Modo Escuro (Dark Mode) Integrado:** Botão discreto e elegante posicionado no centro do topo da janela para alternar entre tema Claro e Escuro com um único clique.
+- **🌙 Modo Escuro (Dark Mode) Integrado:** Botão discreto e elegante posicionado no centro do topo da janela para alternar entre tema Claro e Escuro com um único clique, com barra de rolagem e controles de volume em verde esmeralda.
+- **🔇 Supressão Automática de Diálogos QEMU:** O agente em segundo plano suprime silenciosamente janelas indesejadas de "Saving state..." ou "QuickBoot", mantendo a inicialização limpa.
 - **📁 Sincronização Bidirecional de Arquivos:** Pasta compartilhada contínua entre o computador (`%USERPROFILE%\ApkStartShared`) e a máquina Android (`/sdcard/ApkStartShared`).
 - **⚡ Desempenho e Leveza Máxima:** O motor de virtualização permanece em segundo plano; ao fechar a janela, ele suspende processos para poupar 100% de CPU para suas tarefas no Windows.
 - **🛡️ 100% Livre de Anúncios e Bloatware:** Código limpo e transparente, sem jogos patrocinados ou notificações invasivas.
@@ -28,9 +33,9 @@ Um aplicativo desktop moderno, ultraleve, portátil e de alto desempenho para Wi
 
 ## 🚀 Como Usar
 
-1. Baixe o pacote portátil ou instalador na aba [Releases](https://github.com/Emertels/apkstart/releases).
-2. Execute o **`ApkStart.exe`**.
-3. No canto superior direito, acerte as **Configurações** e clique em **Instalação Automática** (ocorre apenas na primeira inicialização para preparar o ambiente Android).
+1. Baixe o pacote portátil (`ApkStart-v0.5.8-PTBR-win64-portable.zip`) na aba [Releases](https://github.com/Emertels/apkstart/releases).
+2. Extraia para uma pasta de sua preferência e execute o **`ApkStart.exe`**.
+3. O ApkStart fará a verificação inicial do seu computador e preparará o ambiente de forma automática.
 4. Arraste qualquer arquivo `.apk` para a janela do ApkStart ou clique duas vezes no `.apk` no seu Windows.
 5. Um atalho com o ícone do aplicativo será criado na sua Área de Trabalho para você abrir quando quiser!
 
@@ -42,17 +47,20 @@ Um aplicativo desktop moderno, ultraleve, portátil e de alto desempenho para Wi
 apkstart/
 ├── src/
 │   ├── core/               # Módulos de virtualização, ADB, provisionamento e instalador
-│   │   ├── backends/       # Suporte a motores (QEMU embutido, MuMu, FydeOS, ADB externo)
+│   │   ├── win/            # Agente PowerShell em segundo plano e supressão de popups
 │   │   ├── adb.js          # Comunicação via Android Debug Bridge
+│   │   ├── preflight.js    # Diagnóstico de hardware, Hyper-V, WHPX, BIOS e GPU
+│   │   ├── drivers.js      # Gerenciamento de perfis de compatibilidade de GPU
+│   │   ├── resources.js    # Alocador dinâmico de vCPU, RAM e armazenamento
 │   │   ├── doctor.js       # Auto-verificação do sistema e diagnóstico inteligente
 │   │   ├── emulator.js     # Gerenciamento de ciclo de vida da máquina virtual
 │   │   └── installer.js    # Extração de metadados, ícones e instalação de APKs
 │   ├── ui/                 # Interface do usuário (Electron / HTML5 / CSS3 / Vanilla JS)
-│   │   ├── index.html      # Janela principal do inicializador
+│   │   ├── index.html      # Janela principal do inicializador (100% PT-BR)
 │   │   ├── app.js          # Lógica da interface, eventos e alternador de tema
-│   │   ├── theme.css       # Estilos visuais, variáveis de cor e Modo Escuro
-│   │   ├── shell.html      # Janela flutuante individual do aplicativo Android
-│   │   └── shell.js        # Controle de janela (rotação, minimizar, fechar)
+│   │   ├── theme.css       # Estilos visuais, variáveis de cor, scrollbar verde e Modo Escuro
+│   │   ├── splash.html     # Janela de splash com barra de progresso em tempo real
+│   │   └── splash.js       # Controle de carregamento e fadeout do splash
 │   ├── main.js             # Processo principal do Electron, menus de bandeja e atalhos
 │   └── preload.js          # Ponte de segurança IPC entre Node.js e Chromium
 ├── package.json            # Metadados e scripts de empacotamento do projeto
@@ -67,7 +75,7 @@ apkstart/
 
 Distribuído sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
 
-* **Tradução, Localização PT-BR e Modo Escuro:** Desenvolvido por **Emerson Teles** ([@Emertels](https://github.com/Emertels)).
+* **Tradução, Localização PT-BR e Modo Escuro:** Desenvolvido e mantido por **Emerson Teles** ([@Emertels](https://github.com/Emertels)).
 * **Projeto Base Original:** Baseado no projeto de código aberto desenvolvido por **[RoutineMiku](https://github.com/RoutineMiku/apkstart)**.
 
 ---

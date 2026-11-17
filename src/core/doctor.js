@@ -16,6 +16,7 @@ const path = require('path');
 const net = require('net');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+const { memoryLimits } = require('./resources');
 
 const ASCII = /^[\x20-\x7e]*$/;
 const isAsciiPath = (p) => ASCII.test(String(p || ''));
@@ -59,24 +60,67 @@ function versionNumbers(v) {
 }
 
 /**
+ * 检测 GPU 厂商（NVIDIA / AMD / Intel），用于调整渲染后端优先级。
+ * 只在 Windows 上查 WMI；其他平台返回 'unknown'。
+ * 结果缓存 10 分钟，避免每次 chooseProfile 都 spawn wmic。
+ */
+let _gpuVendorCache = { vendor: 'unknown', at: 0 };
+function detectGpuVendor() {
+  if (process.platform !== 'win32') return 'unknown';
+  if (Date.now() - _gpuVendorCache.at < 600000) return _gpuVendorCache.vendor;
+  try {
+    const { execFileSync } = require('child_process');
+    // wmic 在 Win11 24H2+ 已被移除，改用 PowerShell Get-CimInstance
+    let names = '';
+    try {
+      names = execFileSync('powershell.exe', [
+        '-NoProfile', '-Command',
+        '(Get-CimInstance Win32_VideoController).Name -join "|"',
+      ], { encoding: 'utf8', windowsHide: true, timeout: 8000 });
+    } catch (_) {
+      // 回退到 wmic（老系统仍可用）
+      try {
+        names = execFileSync('wmic', ['path', 'win32_videocontroller', 'get', 'name', '/format:list'],
+          { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+      } catch (__) { /* ignore */ }
+    }
+    const lower = String(names).toLowerCase();
+    let vendor = 'unknown';
+    // 优先匹配独显（NVIDIA/AMD），虚拟显示适配器排在后面
+    if (/nvidia|geforce|rtx\s|gtx\s/.test(lower)) vendor = 'nvidia';
+    else if (/(?<!virtual\s)(amd|radeon|rx\s\d)/.test(lower)) vendor = 'amd';
+    else if (/intel|uhd\s|iris|arc\s/.test(lower)) vendor = 'intel';
+    _gpuVendorCache = { vendor, at: Date.now() };
+    return vendor;
+  } catch (_) {
+    _gpuVendorCache = { vendor: 'unknown', at: Date.now() };
+    return 'unknown';
+  }
+}
+
+/**
  * emulator 36.4.9 起把 swiftshader_indirect 标记为弃用，新增 -gpu software。
  * 37.x 上传 swiftshader_indirect 会出现 GL 初始化失败/直接退出（设备差异很大）。
  * 因此必须按版本挑候选，且每个候选都有退路。
+ *
+ * 按 GPU 厂商微调优先级：
+ *   NVIDIA：host 几乎总是最优（驱动成熟），swangle 兜底
+ *   AMD：host 在部分驱动下会崩（尤其老驱动），swangle 提到第二优先
+ *   Intel：host 通常 OK，但集显性能弱时 swangle 更稳
+ *   unknown：保持默认顺序
  */
 function gpuCandidates(emulatorVersion) {
   const [major, minor, patch] = versionNumbers(emulatorVersion);
   const modern = major > 36 || (major === 36 && (minor > 4 || (minor === 4 && patch >= 9)));
-  return modern
-    // 顺序即「自动模式的尝试优先级」：
-    // 1) host        —— 用真实显卡渲染，最省 CPU、最跟手；
-    // 2) swangle     —— ANGLE 跑在 SwiftShader 之上的软件渲染。比裸 software/swiftshader
-    //                  对 Android WebView 的合成层友好得多（红果/抖音这类「点同意后进主界面
-    //                  黑屏」就是裸软件渲染过不了 WebView 合成导致的），因此排在第二顺位；
-    // 3) software    —— 纯 SwiftShader 兜底，兼容性OK但 WebView 合成易黑屏，仅最后才用；
-    // 4) swiftshader —— 旧名兜底。
-    // 注意 safeGpu（关闭加速的 TCG 兜底）仍取 software，保证「慢但最兼容」。
+  const base = modern
     ? ['host', 'swangle', 'software', 'swiftshader']
     : ['host', 'swiftshader_indirect', 'swiftshader'];
+  const vendor = detectGpuVendor();
+  if (vendor === 'amd' && modern) {
+    // AMD 驱动在某些版本下 host 模式会 GL 初始化失败，把 swangle 提到前面
+    return ['swangle', 'host', 'software', 'swiftshader'];
+  }
+  return base;
 }
 
 /** Windows 8.3 短路径：中文用户名 / 中文安装目录时 emulator 会找不到文件 */
@@ -141,14 +185,30 @@ function chooseProfile({
   const accelOk = !!(accel && accel.ok);
   // 3GB 足够 Android 14 与主流应用；再高只会放大内存占用和 quickboot 快照体积
   let memoryMB = clamp(Math.floor((host.totalMB * 0.22) / 256) * 256, 2048, 3072);
+  // 「省资源」模式：刷视频/看小说这类轻负载用不到 3G，把上限压到 2G。
+  // 直接效果是 qemu 常驻内存少约 1GB、quickboot 快照也小 1GB（磁盘同步受益）。
+  // 只有用户没手动指定内存时才收敛，手动值永远优先。
+  const rmode = settings && settings.engine && settings.engine.resourceMode;
+  if (rmode === 'save' && !overrides.memoryMB) {
+    memoryMB = clamp(memoryMB, 2048, 2048);
+  }
   // 物理可用内存不够时下调；Android 14 最低 2G，低于此只能靠 TCG 慢速跑
   if (host.freeMB && host.freeMB < memoryMB + 1024) {
     memoryMB = Math.max(2048, Math.floor((host.freeMB * 0.5) / 256) * 256);
   }
-  if (overrides.memoryMB) memoryMB = clamp(Number(overrides.memoryMB) || memoryMB, 1536, 8192);
+  if (overrides.memoryMB) {
+    // 上限跟着宿主走：早先写死 8192，结果 32GB 机器上也最多只能分 8GB，
+    // 大型游戏（尤其带高清资源包的）进场景就频繁回收贴图，表现是卡顿/黑屏。
+    const lim = memoryLimits(host.totalMB);
+    memoryMB = clamp(Number(overrides.memoryMB) || memoryMB, 1536, lim.maxMB);
+  }
 
   let cores = clamp(Math.floor(host.cores / 2), 2, 4);
-  if (overrides.cores) cores = clamp(Number(overrides.cores) || cores, 1, 8);
+  if (overrides.cores) {
+    // 同样跟着宿主：至少留 1 核给 Windows，单核机器仍然给 1 核
+    const maxCores = Math.max(1, (host.cores || 1) - 1);
+    cores = clamp(Number(overrides.cores) || cores, 1, maxCores);
+  }
   // 用户没手动指定核数时才由轻量模式收敛，手动值永远优先
   const lite = settings ? liteProfile({ host, engine: settings.engine || {} }) : null;
   if (lite && !overrides.cores) cores = Math.min(cores, lite.cores);
@@ -158,8 +218,14 @@ function chooseProfile({
   // （表现就是应用内更新时提示「磁盘空间不足」）。默认按磁盘余量给 6/8GB，
   // 用户也可以直接在设置里指定（改大后下次开机就地扩容，不丢数据）。
   const wantGB = Number((settings && settings.engine && settings.engine.dataPartitionGB) || 0);
-  const autoDataMB = disk && disk < 12288 ? 4096 : 6144;
-  const dataMB = wantGB > 0 ? clamp(Math.round(wantGB * 1024), 2048, 65536) : autoDataMB;
+  // 自动值也跟磁盘余量走：50GB 级游戏解包后接近 90GB，余量大的机器给 16GB 起步，
+  // 免得装完第一个大游戏就开始报「空间不足」。
+  const autoDataMB = disk && disk < 12288 ? 4096 : (disk && disk > 262144 ? 16384 : 6144);
+  // 用户指定时按「所在磁盘的 80%」封顶：填 128GB 但盘里只有 20GB，只会装到一半失败
+  const dataMaxMB = disk ? Math.max(2048, Math.floor((disk * 0.8) / 1024) * 1024) : 262144;
+  const dataMB = wantGB > 0
+    ? clamp(Math.round(wantGB * 1024), 2048, Math.min(262144, dataMaxMB))
+    : autoDataMB;
 
   const gpus = gpuCandidates(emulatorVersion);
   const gpu = overrides.gpuMode && gpus.includes(overrides.gpuMode) ? overrides.gpuMode : gpus[0];
@@ -222,8 +288,11 @@ function overridesFromSettings(engine = {}) {
  * 之前设置页直接调 chooseProfile()（不带版本和加速状态），会在 37.x 机器上
  * 错误地显示已弃用的 swiftshader_indirect / 软件模拟，和实跑参数对不上。
  */
-function autoProfile({ settings = {}, accel, emulatorVersion = '', diskMB = 0, port = 5554, adbPort = 5044 } = {}) {
+function autoProfile({ settings = {}, accel, emulatorVersion = '', diskMB = 0, port = 5554, adbPort = 5044, host = null } = {}) {
   return chooseProfile({
+    // host 可注入：单测/诊断想复现「4 核小机器」时不用真的换机器。
+    // 不传就按本机实际情况算（正常运行时都是这条路径）。
+    host: host || hostInfo(),
     accel, emulatorVersion, diskMB, port, adbPort, settings,
     overrides: overridesFromSettings(settings && settings.engine),
   });
@@ -240,13 +309,13 @@ function planVariants(profile) {
   const safeGpu = gpus.find((g) => /software|swiftshader/.test(g)) || firstGpu;
   const ordered = [firstGpu, ...gpus.filter((g) => g !== firstGpu && /swiftshader|swangle/.test(g))].slice(0, 2);
   for (const gpu of ordered) {
-    out.push({ ...profile, gpu, label: `${gpu} / ${profile.accel === 'auto' ? 'Aceleração por hardware' : 'Emulação por software'}`, wipe: false, snapshot: true });
+    out.push({ ...profile, gpu, label: `${gpu} / ${profile.accel === 'auto' ? '硬件加速' : '软件模拟'}`, wipe: false, snapshot: true });
   }
   out.push({
     ...profile,
     gpu: safeGpu,
     accel: 'off',
-    label: 'Emulação por software sem aceleração (mais lenta, porém máxima compatibilidade)',
+    label: '关闭加速的软件模拟（慢，但兼容性最好）',
     wipe: false,
     snapshot: false,
   });
@@ -257,7 +326,7 @@ function planVariants(profile) {
     memoryMB: 2048,
     cores: 2,
     dataMB: Math.min(profile.dataMB, 2048),
-    label: 'Inicialização a frio conservadora (memória mínima + limpar instantâneos)',
+    label: '保守冷启动（最小内存 + 清快照）',
     // 这里**绝对不能** wipe：以前写的是 wipe:true，而磁盘写满时每次尝试都会失败，
     // 于是连续重试把用户已装的应用和存档一起「清快照 + 清数据」了 ——
     // 「磁盘满了，结果打开 ApkStart 应用全没了」就是这么发生的。
@@ -348,92 +417,92 @@ const RULES = [
     // 与 CPU、内存、镜像都无关（同机换 -gpu software 往往就能过）。
     // 必须排在 GPU_INIT 前面：崩溃日志里通常也带着渲染初始化信息，先判崩溃更准。
     re: /emulator exit 3221225477|exit code 3221225477|0xC0000005|STATUS_ACCESS_VIOLATION/i,
-    title: 'Falha no renderizador gráfico (Acesso inválido 0xC0000005)',
-    hint: 'Alternado automaticamente para renderizador mais seguro para as próximas execuções.'
-      + 'Se persistir, atualize o driver de vídeo; ou em Configurações → Desempenho e Recursos reduza a resolução/desative aceleração de GPU remota.',
+    title: '渲染后端崩溃（0xC0000005 访问冲突）',
+    hint: '已自动改用更保守的渲染后端重试，并记住这个后端下次不再先试。'
+      + '若反复出现，请更新显卡驱动；或在设置 → 性能与资源里把画质调低、关闭远程桌面/虚拟机显卡直通后再试。',
   },
   {
     code: 'GPU_INIT',
     // 只匹配「失败」语境：正常日志里也会出现 Vulkan/EGL/ANGLE 字样，不能误判为致命错误
     re: /Failed to initialize GL emulation|Could not initialize (OpenGL|emulated framebuffer)|Failed to create .*GLES|EGL_(BAD|NOT_INITIALIZED|CONTEXT_LOST)|Failed to (load|initialize) .*vulkan|vulkan.*(failed|error)|ANGLE.*(fail|error)/i,
-    title: 'Falha ao inicializar renderizador da GPU',
-    hint: 'Alternado para renderização por software. Atualize os drivers da GPU se persistir.',
+    title: '显卡渲染后端初始化失败',
+    hint: '已自动切换软件渲染重试。若仍失败，请更新显卡驱动，或关闭远程桌面/虚拟机显卡直通后再试。',
   },
   {
     code: 'GPU_MODE',
     re: /Unknown option|invalid .*-gpu|Unrecognized .*gpu|Unsupported gpu/i,
-    title: 'Modo de GPU incompatível com este runtime',
-    hint: 'Modo de GPU compatível selecionado automaticamente.',
+    title: '当前运行时不接受该 GPU 模式',
+    hint: '已自动按运行时版本挑选可用的 GPU 模式重试（老版本用 swiftshader_indirect，新版本用 software）。',
   },
   {
     code: 'ACCEL',
     re: /x86_64 emulation currently requires hardware acceleration|acceleration.*not (installed|available|supported)|WHPX.*(not|failed)|AEHD.*(not|failed)|ERROR_ACCESS_DENIED|加速.*不可用/i,
-    title: 'Aceleração por hardware indisponível',
-    hint: 'Alternado para emulação por software. Para máximo desempenho, ative a Plataforma de Máquina Virtual no Windows.',
+    title: '硬件加速不可用',
+    hint: '已自动回退软件模拟（首次启动会明显变慢）。想要流畅可用，请在「Windows 功能」勾选「虚拟机平台」，或安装 AEHD 驱动后重启。',
   },
   {
     code: 'MEMORY',
     re: /Cannot allocate memory|not enough memory|commit charge|Failed to allocate|out of memory|内存不足/i,
-    title: 'Falha de alocação de memória',
-    hint: 'Memória e núcleos reduzidos automaticamente. Feche programas pesados do Windows.',
+    title: '内存分配失败',
+    hint: '已自动下调分配给 Android 的内存与核心数。请关闭占内存的程序后重试。',
   },
   {
     code: 'PORT_BUSY',
     re: /port.*(in use|busy)|Address already in use|bind.*failed|Failed to (setup|bind) .*console/i,
-    title: 'Porta do emulador em uso',
-    hint: 'Porta livre selecionada automaticamente. Feche outros emuladores se o conflito persistir.',
+    title: '模拟器端口被占用',
+    hint: '已自动换用空闲端口。若反复出现，请退出夜神/MuMu/蓝叠等模拟器，或重启电脑。',
   },
   {
     code: 'AVD_LOCK',
     re: /already running|lock file|\.lock|AVD is in use|emulator is running/i,
-    title: 'Arquivo de bloqueio antigo detectado',
-    hint: 'Arquivo de bloqueio removido automaticamente e runtime reiniciado.',
+    title: '上次运行残留了锁文件',
+    hint: '已自动清理 AVD 锁文件并重新拉起。',
   },
   {
     code: 'IMAGE',
     re: /system\.img.*(missing|not found|corrupt)|kernel-ranchu.*(missing|not found)|invalid magic|Failed to open .*\.img|APEX.*(fail|error|loop)|boot loop|verity.*fail/i,
-    title: 'Imagem do sistema corrompida ou dados incompatíveis',
-    hint: 'Iniciado automaticamente com partição de dados limpa.',
+    title: '系统镜像缺失或损坏 / 与旧用户数据不兼容',
+    hint: '已自动用干净的用户数据重新开机。若仍失败，请在「运行时」里删除镜像后重新下载。',
   },
   {
     code: 'DLL',
     re: /0xc0000135|STATUS_DLL_NOT_FOUND|missing DLL|Qt6.*not found|MSVCP140|VCRUNTIME|无法启动此程序|The code execution cannot proceed/i,
-    title: 'Componente bloqueado pelo antivírus ou falta VC++',
-    hint: 'Adicione a pasta do ApkStart às exceções do antivírus e instale o Visual C++ 2015-2022.',
+    title: '运行时组件被杀毒软件删除或缺少 VC++ 运行库',
+    hint: '请把 ApkStart 目录加入杀毒软件白名单后重新解压安装包，并安装微软 VC++ 2015-2022 运行库。',
   },
   {
     code: 'DISK_FULL',
     re: /No space left|disk full|not enough space|磁盘空间不足/i,
-    title: 'Espaço em disco insuficiente para iniciar o Android',
-    hint: 'Altere a Pasta de Dados do Runtime em Configurações → Integração com Windows para outro disco,'
-      + 'ou nas Configurações desative "Manter instantâneo de inicialização rápida" / reduza o tamanho da partição de dados. Os dados do Android não serão apagados.',
+    title: '磁盘空间不足，无法启动安卓',
+    hint: '请把运行时目录（设置 → 系统集成 → 运行时数据目录）改到空间充足的盘，'
+      + '或在设置里关掉「保留快速启动快照」/ 调小数据分区。安卓数据不会被自动清除。',
   },
   {
     code: 'NON_ASCII',
     re: /Unicode|non-ASCII|路径.*(无效|找不到)|cannot find the path/i,
-    title: 'Caminho de instalação contém caracteres especiais',
-    hint: 'Caminho curto do Windows aplicado. Se persistir, mova para pasta simples (ex: C:\\ApkStart).',
+    title: '安装路径含中文或特殊字符',
+    hint: '已自动改用 Windows 短路径。若仍失败，请把 ApkStart 移到纯英文目录（如 C:\\ApkStart）。',
   },
   {
     // 上次被强制结束后 AVD 目录会留下 hardware-qemu.ini.lock / multiinstance.lock，
     // 模拟器一律拒绝启动，报出来的却是容易被误读成 CPU 问题的话。必须排在 CPU 规则前。
     code: 'AVD_LOCK',
     re: /Running multiple emulators with the same AVD|AVD .*is already running|hardware-qemu\.ini\.lock/i,
-    title: 'Encerramento anterior incompleto (lock residual)',
-    hint: 'O ApkStart limpa o lock automaticamente e tenta novamente.',
+    title: '上一次运行没有正常退出，残留了锁文件',
+    hint: 'ApkStart 会自动清掉残留锁并重试；若反复出现，请检查是否有别的模拟器正在用同一套运行时。',
   },
   {
     code: 'CPU_FEATURE',
     re: /host doesn't support requested feature|CPUID.*not supported|unsupported CPU|missing.*(AVX|SSE4|xsave)/i,
-    title: 'Instruções de CPU não suportadas',
-    hint: 'Aviso de compatibilidade de CPU. O sistema tenta iniciar em modo compatível.',
+    title: 'CPU 缺少运行时要求的指令集',
+    hint: '这类提示在部分老 CPU 上只是警告、仍能开机；若确实起不来，请把「运行时」里的引擎更新到较旧兼容版本，或换一台支持 VT-x/AVX 的电脑。',
   },
 
   {
     code: 'SNAPSHOT',
     re: /snapshot|Quick Boot|ram\.img|Saving state/i,
-    title: 'Snapshot de inicialização rápida corrompido',
-    hint: 'Snapshot antigo descartado; boot a frio realizado. Um novo snapshot será salvo ao sair.',
+    title: '快速启动快照损坏',
+    hint: '已自动丢弃旧快照走冷启动；下一次正常退出会重新生成快照。',
   },
 ];
 
@@ -445,16 +514,16 @@ function diagnose(lines) {
   }
   return {
     code: 'UNKNOWN',
-    title: 'Falha ao inicializar o runtime',
-    hint: 'Foram tentadas múltiplas combinações de parâmetros. Exporte o diagnóstico para detalhes.',
+    title: '运行时未能完成开机',
+    hint: '已自动按多种参数组合重试。可点「导出诊断报告」把日志发给作者定位。',
   };
 }
 
 /** 人类可读的一行摘要，放在设置页让高级用户知道自动选了什么 */
 function describeProfile(p) {
-  return `Auto: ${(p.memoryMB / 1024).toFixed(1)}GB RAM · ${p.cores} núcleos · Renderizador ${p.gpu} · `
-    + `${p.accelOk ? 'Aceleração por hardware' : 'Emulação por software'} · ${p.snapshot ? 'Snapshots sob demanda' : 'Boot a frio'}`
-    + `${p.lite ? ' · Contêiner leve' : ''} · Porta ${p.port}`;
+  return `自动：${(p.memoryMB / 1024).toFixed(1)}GB 内存 · ${p.cores} 核 · ${p.gpu} 渲染 · `
+    + `${p.accelOk ? '硬件加速' : '软件模拟'} · ${p.snapshot ? '按需快照' : '冷启动'}`
+    + `${p.lite ? ' · 轻量容器' : ''} · 端口 ${p.port}`;
 }
 
 /** 导出诊断报告（纯文本，便于发邮件/贴 issue） */
@@ -464,24 +533,24 @@ function writeReport({ dataDir, profile, logLines = [], extra = {} }) {
   const file = path.join(dir, `diagnostic-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`);
   const d = diagnose(logLines);
   const body = [
-    'Relatório de Diagnóstico do ApkStart',
-    `Gerado em: ${new Date().toLocaleString()}`,
+    'ApkStart 诊断报告',
+    `生成时间：${new Date().toLocaleString()}`,
     '',
-    '== Máquina Local ==',
+    '== 本机 ==',
     JSON.stringify(hostInfo(), null, 2),
     '',
-    '== Configuração Automática ==',
+    '== 自动配置 ==',
     JSON.stringify(profile || {}, null, 2),
     describeProfile(profile || chooseProfile()),
     '',
-    '== Diagnóstico ==',
+    '== 诊断 ==',
     `${d.code}：${d.title}`,
     d.hint,
     '',
-    '== Informações Adicionais ==',
+    '== 附加信息 ==',
     JSON.stringify(extra, null, 2),
     '',
-    '== Logs do Runtime (últimas 300 linhas) ==',
+    '== 运行时日志（末尾 300 行）==',
     ...(Array.isArray(logLines) ? logLines.slice(-300) : String(logLines || '').split('\n')),
   ].join('\n');
   fs.writeFileSync(file, body, 'utf8');
@@ -518,7 +587,7 @@ function vcRedistOk() {
 
 module.exports = {
   hostInfo, freeDiskMB, isAsciiPath, shortPath, lcdFor, liteProfile,
-  versionNumbers, gpuCandidates, chooseProfile, planVariants,
+  versionNumbers, gpuCandidates, detectGpuVendor, chooseProfile, planVariants,
   overridesFromSettings, autoProfile,
   freePortPair, freeAdbPort, snapshotKey, imageIdentity,
   diagnose, describeProfile, writeReport, vcRedistOk,

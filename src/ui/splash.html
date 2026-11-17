@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+<title>ApkStart PT-BR</title>
+<link rel="stylesheet" href="splash.css" />
+</head>
+<body>
+<div class="splash" id="splash">
+  <!-- Logo -->
+  <div class="logo-wrap">
+    <img class="logo" id="logo" src="assets/logo.png" alt="ApkStart" draggable="false" />
+    <div class="brand">ApkStart PT-BR</div>
+    <div class="tagline">Inicializador de apps Android para Windows</div>
+  </div>
+
+  <!-- Barra de progresso -->
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- Texto de status -->
+  <div class="status" id="status">Iniciando componentes...</div>
+
+  <!-- Primeira instalação -->
+  <div class="first-run" id="firstRun" hidden>
+    <div class="first-run-title" id="firstRunTitle">Primeira Inicialização · Configuração Automática</div>
+    <ul class="first-run-list" id="firstRunList">
+      <li>Baixando o motor do Android (apenas na 1ª vez)</li>
+      <li>Baixando a imagem do sistema Android (apenas na 1ª vez)</li>
+      <li>Configurando aceleração gráfica e rede</li>
+      <li>Pronto para abrir APKs e atalhos na Área de Trabalho com dois cliques</li>
+    </ul>
+  </div>
+
+  <!-- Rodapé -->
+  <div class="footer">ApkStart PT-BR v<span id="ver"></span> · Mantido por Emerson Teles</div>
+</div>
+
+<script src="splash.js"></script>
+</body>
+</html>

@@ -1,10 +1,10 @@
 {
-  "name": "apkstart-ptbr",
-  "productName": "ApkStart PT-BR",
-  "version": "0.4.4",
-  "description": "Inicializador ultraleve de apps Android para Windows em Português do Brasil: instalação de APKs com dois cliques, atalhos na Área de Trabalho e janelas independentes",
+  "name": "apkstart",
+  "productName": "ApkStart",
+  "version": "0.5.8",
+  "description": "Inicializador ultraleve de aplicativos Android para Windows com suporte a modo escuro, janelas independentes e atalhos na Área de Trabalho.",
   "main": "src/main.js",
-  "author": "Emerson Teles",
+  "author": "Emerson Teles <https://github.com/Emertels>",
   "license": "MIT",
   "private": true,
   "homepage": "https://github.com/Emertels/apkstart#readme",
@@ -29,19 +29,27 @@
     "node": ">=20"
   },
   "os": [
-    "win32"
+    "win32",
+    "linux"
   ],
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node test/run-tests.js && node test/engine-test.js && node test/auto-test.js",
+    "test": "node test/run-tests.js && node test/android-test.js && node test/range-validation-test.js && node test/display-scale-test.js && node test/resources-test.js && node test/drivers-test.js && node test/preflight-test.js && node test/standalone-test.js && node test/boot-auth-test.js && node test/issue-hardening-test.js && node test/engine-test.js && node test/auto-test.js",
     "pack": "node build/pack.js",
     "runtime": "node build/prepare-runtime.js",
-    "build:exe": "node build/prepare-runtime.js && electron-builder --win nsis",
+    "build:exe": "node build/prepare-runtime.js && electron-builder --win nsis --config electron-builder.yml",
+    "build:appx": "node build/prepare-runtime.js && electron-builder --win appx --x64 --config electron-builder.yml",
+    "build:msix": "node build/msix.js",
     "selftest": "node scripts/selftest.js",
     "assoc:on": "node scripts/assoc.js on",
     "assoc:off": "node scripts/assoc.js off",
-    "test:boot": "node test/boot-test.js"
+    "test:boot": "node test/boot-test.js",
+    "pack:linux": "electron-builder --linux AppImage --config electron-builder.yml",
+    "icons": "electron build/build-icons.js",
+    "shots": "electron build/store-shots.js",
+    "pack:full": "node build/pack.js --full",
+    "build:all": "node build/pack.js && node build/pack.js --full && node build/msix.js"
   },
   "devDependencies": {
     "electron": "^33.4.11",

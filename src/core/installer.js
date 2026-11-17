@@ -31,7 +31,7 @@ async function parseBundle(filePath) {
   const cleanup = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* ignore */ } };
   try {
     const apkNames = zip.names().filter((n) => /\.apk$/i.test(n));
-    if (!apkNames.length) throw new Error('Nenhum fragmento de APK encontrado neste pacote (pode não ser um .apks/.xapk válido)');
+    if (!apkNames.length) throw new Error('这个安装包里没有找到 APK 分片（可能不是 .apks/.xapk）');
     fs.mkdirSync(dir, { recursive: true });
     const files = [];
     for (let i = 0; i < apkNames.length; i++) {
@@ -45,7 +45,7 @@ async function parseBundle(filePath) {
     for (const f of files) {
       try { meta = parseApk(f); break; } catch (_) { /* 分片里没有清单 */ }
     }
-    if (!meta) throw new Error('Falha ao analisar o APK base do pacote dividido');
+    if (!meta) throw new Error('拆分包的 base APK 解析失败');
     return { meta, files, cleanup };
   } catch (e) {
     cleanup();
@@ -105,9 +105,9 @@ class Installer {
   async ensureCompatImage(onProgress) {
     const prov = this.runtime.provisioner;
     if (prov.playImageInfo().ok) return true;
-    onProgress({ stage: 'runtime', message: 'Primeira instalação de app ARM: baixando imagem compatível (aprox. 1,5 GB, apenas uma vez)…' });
+    onProgress({ stage: 'runtime', message: '首次安装 ARM 应用：正在下载兼容镜像（约 1.5GB，只需一次）…' });
     await prov.installPlayImage((p) => onProgress({ stage: 'runtime', message: p.message, percent: p.percent }));
-    if (!prov.playImageInfo().ok) throw new Error('Falha no download da imagem de compatibilidade. Verifique a conexão e tente novamente');
+    if (!prov.playImageInfo().ok) throw new Error('兼容镜像下载失败，请检查网络后重试');
     return true;
   }
 
@@ -115,7 +115,7 @@ class Installer {
   async switchToCompat(onProgress) {
     const apps = store.getApps();
     store.saveSettings({ runtime: { compatImage: true } });
-    onProgress({ stage: 'runtime', message: 'Alternando para imagem compatível e reiniciando runtime…' });
+    onProgress({ stage: 'runtime', message: '正在切换到兼容镜像并重启运行时…' });
     try { await this.runtime.stop(); } catch (_) { /* ignore */ }
     // 等旧设备从 adb 列表里消失，避免被 ensure() 当成可复用实例
     for (let i = 0; i < 12; i += 1) {
@@ -127,7 +127,7 @@ class Installer {
     }
     const rt = await this.runtime.ensure({ onLog: (m) => onProgress({ stage: 'runtime', message: m }) });
     if (!rt.ok) {
-      const err = new Error(rt.error || 'Runtime indisponível após alternar para imagem de compatibilidade');
+      const err = new Error(rt.error || '切换兼容镜像后运行时不可用');
       err.needsSetup = rt.needsSetup || 'provision';
       throw err;
     }
@@ -144,14 +144,14 @@ class Installer {
           // eslint-disable-next-line no-await-in-loop
           await rt.client.install(app.apkPath);
         }
-        onProgress({ stage: 'runtime', message: `Restaurando aplicativo ${app.label}…` });
+        onProgress({ stage: 'runtime', message: `正在恢复已装应用 ${app.label}…` });
       } catch (_) { /* 单个应用恢复失败不阻塞 */ }
     }
     return rt;
   }
 
   async install(filePath, onProgress = () => {}) {
-    onProgress({ stage: 'parse', message: 'Analisando APK…' });
+    onProgress({ stage: 'parse', message: '正在解析 APK…' });
     let meta;
     let bundle = null;
     if (/\.(apks|xapk)$/i.test(filePath)) {
@@ -162,9 +162,35 @@ class Installer {
     }
     onProgress({
       stage: 'parse-done',
-      message: `Identificado: ${meta.label} (${meta.package})`, 
+      message: `已识别 ${meta.label}（${meta.package}）`,
       meta: { label: meta.label, package: meta.package, versionName: meta.versionName },
     });
+
+    // 50GB 级游戏：先核对模拟器数据盘剩余空间，而不是装到一半才报
+    // INSTALL_INSUFFICIENT_STORAGE（用户看到的是「装了很久然后失败」）。
+    try {
+      const backend = this.runtime && this.runtime.backend;
+      if (backend && typeof backend.checkDiskFor === 'function') {
+        let bytes = 0;
+        if (bundle && bundle.files) {
+          for (const f of bundle.files) {
+            try { bytes += fs.statSync(f).size; } catch (_) { /* 忽略临时文件 */ }
+          }
+        } else {
+          try { bytes = fs.statSync(filePath).size; } catch (_) { /* 用 0 兜底 */ }
+        }
+        const verdict = backend.checkDiskFor(bytes);
+        if (!verdict.ok) {
+          onProgress({ stage: 'error', message: verdict.message });
+          const err = new Error(verdict.message);
+          err.needsSetup = 'disk';
+          throw err;
+        }
+      }
+    } catch (e) {
+      if (e && e.needsSetup === 'disk') throw e;
+      // 容量探测失败不能挡住安装
+    }
 
     try {
       // 零配置：仅含 ARM 库的应用自动补齐带 ARM 翻译层的镜像，用户不用开任何开关
@@ -174,10 +200,10 @@ class Installer {
         return this.finishInstall(switched, meta, filePath, bundle, onProgress);
       }
 
-      onProgress({ stage: 'runtime', message: 'Preparando runtime Android…' });
+      onProgress({ stage: 'runtime', message: '正在准备安卓运行时…' });
       const rt = await this.runtime.ensure({ onLog: (m) => onProgress({ stage: 'runtime', message: m }) });
       if (!rt.ok) {
-        const err = new Error(rt.error || 'Runtime indisponível');
+        const err = new Error(rt.error || '运行时不可用');
         err.needsSetup = rt.needsSetup || 'provision';
         throw err;
       }
@@ -193,7 +219,7 @@ class Installer {
     const existing = store.getApp(meta.package);
     // 装完之后旧 quickboot 快照里的磁盘状态就过期了，留着会导致「装好的应用重启后又不见了」
     try { this.runtime.emulator?.invalidateSnapshot(); } catch (_) { /* ignore */ }
-    onProgress({ stage: 'install', message: existing ? 'Atualizando aplicativo…' : 'Instalando aplicativo…' });
+    onProgress({ stage: 'install', message: existing ? '正在更新应用…' : '正在安装应用…' });
     try {
       if (bundle) await client.installMultiple(bundle.files);
       else await client.install(filePath);
@@ -202,7 +228,7 @@ class Installer {
       if (e.code === 'NO_MATCHING_ABIS' && !this.runtime.provisioner.playImageInfo().ok) {
         await this.ensureCompatImage(onProgress);
         const rt2 = await this.switchToCompat(onProgress);
-        onProgress({ stage: 'install', message: 'Imagem compatível ativada, reinstalando…' });
+        onProgress({ stage: 'install', message: '已切换兼容镜像，正在重新安装…' });
         if (bundle) await rt2.client.installMultiple(bundle.files);
         else await rt2.client.install(filePath);
       } else {
@@ -271,6 +297,10 @@ class Installer {
       lastLaunchAt: existing ? existing.lastLaunchAt || 0 : 0,
       shortcutPath: existing ? existing.shortcutPath || null : null,
       bounds: existing ? existing.bounds || null : null,
+      // 应用天然的横竖屏（离线从 APK 清单算出来）：
+      // 决定模拟器物理面板用哪个方向，方向一致画面才能铺满窗口不留黑边。
+      // 用户手动设过 orientationOverride 时以用户的为准，这里只是「默认值」。
+      orientation: meta.orientation || (existing ? existing.orientation || null : null),
       pinned: existing ? !!existing.pinned : false,
     };
 
@@ -278,31 +308,31 @@ class Installer {
 
     const settings = store.getSettings();
     if (settings.createShortcutOnInstall) {
-      onProgress({ stage: 'shortcut', message: 'Criando atalho na Área de Trabalho…' });
+      onProgress({ stage: 'shortcut', message: '正在创建桌面快捷方式…' });
       try {
         app.shortcutPath = this.createShortcut(app);
         store.upsertApp({ package: app.package, shortcutPath: app.shortcutPath });
       } catch (e) {
-        onProgress({ stage: 'shortcut-warn', message: `Falha ao criar atalho: ${e.message}` });
+        onProgress({ stage: 'shortcut-warn', message: `快捷方式创建失败：${e.message}` });
       }
     }
 
     // 兼容性提示：只有 ARM 原生库时，x86 运行时需要转译层
     const warnings = [];
     if (meta.minSdk && meta.minSdk > 34) {
-      warnings.push(`Este aplicativo requer Android ${meta.minSdk}+, superior ao runtime atual, e pode não funcionar perfeitamente.`);
+      warnings.push(`此应用要求 Android ${meta.minSdk}+，高于当前运行时，可能无法正常运行。`);
     }
     if (iconFallback === 'placeholder') {
-      warnings.push('Ícone do app adaptativo especial. O atalho usará temporariamente o ícone padrão.');
+      warnings.push('应用图标无法解析（可能是特殊格式的自适应图标），快捷方式暂时使用占位图标。');
     } else if (iconFallback === 'webp-decode-failed') {
-      warnings.push('Falha na decodificação do ícone (WebP). O atalho usará temporariamente o ícone padrão.');
+      warnings.push('应用图标（WebP）解码失败，快捷方式暂时使用占位图标。');
     }
     client.batteryOptimizeOff(meta.package).catch(() => {});
     // 装应用时作废了旧快照，这里补排一次：空闲时把「已装好新应用」的状态存下来，
     // 否则下次开机要重新冷启动（20 多秒）。
     try { this.runtime.scheduleSnapshotSave?.(12000); } catch (_) { /* ignore */ }
 
-    onProgress({ stage: 'done', message: `${app.label} instalado com sucesso`, app });
+    onProgress({ stage: 'done', message: `${app.label} 安装完成`, app });
     return { app, warnings, engine: rt.engine };
   }
 
@@ -321,7 +351,7 @@ class Installer {
       args,
       iconIcoPath: ico,
       iconPngPath: png,
-      description: `${app.label} — Executado pelo ApkStart`, 
+      description: `${app.label} — 由 ApkStart 运行`,
       cwd: this.ctx.cwd,
       // 每个应用一个 AUMID：任务栏上按应用分组，不会全挤到 ApkStart 里
       appUserModelId: `RoutineMiku.ApkStart.${app.package}`.slice(0, 128),
@@ -351,7 +381,7 @@ class Installer {
         errors.push(`${fallback}: ${e.message}`);
       }
     }
-    if (!first) throw new Error(errors.join('; ') || 'Falha ao criar atalhos');
+    if (!first) throw new Error(errors.join('; ') || '创建快捷方式失败');
     // 开始菜单那份的路径也存下来，卸载时一起删
     if (startMenuPath || first) {
       store.upsertApp({ package: app.package, startMenuPath });
@@ -411,16 +441,20 @@ class Installer {
 
   async launch(pkg, { onLog = () => {}, beforeStart = null, onMark = () => {}, onAppUp = null } = {}) {
     const app = store.getApp(pkg);
-    const rt = await this.runtime.ensure({ onLog });
+    // 用 let：beforeStart 可能因为「面板方向和应用方向不一致」而重启运行时并
+    // 返回一个新的 rt（旧 client 已随 stop 失效）。以前这里是 const，一旦真的
+    // 走了重启分支就抛 "Assignment to constant variable."，把整个启动打断 ——
+    // 表现为「切横屏/竖屏后点应用直接失败」。
+    let rt = await this.runtime.ensure({ onLog });
     onMark('ensure done');
     if (!rt.ok) {
-      const err = new Error(rt.error || 'Runtime indisponível');
+      const err = new Error(rt.error || '运行时不可用');
       err.needsSetup = rt.needsSetup;
       throw err;
     }
     // 分辨率要在拉起应用之前改，避免 wm size 触发配置变更把刚启动的 Activity 重建
     if (beforeStart) {
-      const replaced = await beforeStart(rt).catch((e) => { onLog(`Adaptação de tela ignorada: ${e.message}`); return null; });
+      const replaced = await beforeStart(rt).catch((e) => { onLog(`显示适配跳过：${e.message}`); return null; });
       // beforeStart 可以返回一个新的 rt（重启运行时后旧 client 已失效），
       // 后续全部用新的。不返回就继续用原来的。
       if (replaced && replaced.client) rt = replaced;
@@ -441,13 +475,13 @@ class Installer {
     if (rt.engine === 'emulator' || rt.engine === 'builtin') {
       let net = await this.runtime.waitForNetwork({ onLog, timeoutMs: 20000 }).catch(() => null);
       if (net && net.ok) {
-        onLog(`Rede da máquina virtual pronta (${net.ip || ''})`);
+        onLog(`虚拟机网络就绪（${net.ip || ''}）`);
       } else {
         // 等不到网络时，做一次**非破坏性**的补救：把「已保存但不会自动连」
         // 的 AndroidWifi 点一下。它不重启虚拟机、不碰用户数据，只是拉起设置页
         // 点一条已保存的热点，所以放在启动路径上是安全的。
         // 实机上「虚拟机一直没网」绝大多数就是这个原因（见 emulator.repairWifi）。
-        onLog('Máquina virtual não conectou ao Wi-Fi, tentando reconectar…');
+        onLog('虚拟机连不上 Wi-Fi，正在尝试重新连接…');
         try {
           // 注意：repairWifi 挂在 engine（this.runtime）上，不在 rt 上。
           // rt 是 ensure() 的返回对象 { ok, client, engine, ... }，里面只有 client；
@@ -457,7 +491,7 @@ class Installer {
           if (fixed) {
             net = await this.runtime.waitForNetwork({ onLog, timeoutMs: 15000 }).catch(() => null);
             if (net && net.ok) {
-              onLog(`Rede da máquina virtual restaurada (${net.ip || ''})`);
+              onLog(`虚拟机网络已恢复（${net.ip || ''}）`);
               // 关键：把「网络已连上」这个状态立刻存进快照。
               // 不存的话下次开机还是从「没网」的旧快照恢复，每次都要再花十几秒重连。
               // 用 forceSnapshotSave 是因为马上要启动应用，永远等不到「空闲」。
@@ -466,10 +500,10 @@ class Installer {
           }
         } catch (e) {
           // 不要把异常吞得无声无息：这条日志就是「重连到底跑没跑」的唯一证据。
-          onLog(`Falha ao reconectar Wi-Fi automaticamente: ${e.message}`);
+          onLog(`自动重连 Wi-Fi 失败：${e.message}`);
         }
         if (!net || !net.ok) {
-          onLog('Rede da máquina virtual ainda não pronta, iniciando app (páginas conectadas podem carregar em seguida)');
+          onLog('虚拟机网络还没就绪，先启动应用（联网页面可能稍后才加载出来）');
         }
       }
     }
@@ -481,10 +515,16 @@ class Installer {
     // 应用可能还没装进当前运行时（镜像重建 / 清过数据 / 首次），直接拉起会报
     // "Invalid packageName"。先在本地缓存里把它装上再启动，这样「点开应用」永远能进，
     // 不用先手动装一遍——这正是「点击已安装应用直接进入系统」想要的体验。
+    // 关键：用 isInstalled()（pm path + 逐个核对 APK 文件真实存在）而不是
+    // `pm list packages`。快照与数据分区不一致时 PackageManager 仍报 installed=true，
+    // 但 /data/app 下文件已被回滚掉 —— 这时 am start 必然失败。文件校验不通过就重装。
     if (app && app.apkPath && fs.existsSync(app.apkPath)) {
-      const pkgs = await rt.client.shell(`pm list packages ${pkg}`, { timeout: 8000 }).catch(() => '');
-      if (!new RegExp(`package:${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(pkgs)) {
-        onLog('Aplicativo ainda não instalado, instalando automaticamente…');
+      let installed = false;
+      try { installed = await rt.client.isInstalled(pkg); } catch (_) { /* 当作未安装，走重装 */ }
+      if (!installed) {
+        onLog('应用文件缺失（快照与数据不一致），正在用本地备份自动重装…');
+        // 重装前作废快照：否则旧快照的 packages.xml 仍说「已装」，下次又不对
+        try { this.runtime.emulator?.invalidateSnapshot(); } catch (_) { /* ignore */ }
         await rt.client.install(app.apkPath).catch((e) => onLog(`自动安装失败：${e.message}`));
       }
     }
@@ -558,12 +598,12 @@ class Installer {
         // eslint-disable-next-line no-await-in-loop
         ok = started ? await staysAlive() : false;
         onMark(`alive #${attempt} ${ok}`);
-        if (!ok && attempt < 3) onLog(`O aplicativo encerrou após iniciar (tentativa ${attempt}), tentando novamente automaticamente…`);
+        if (!ok && attempt < 3) onLog(`应用启动后退出（第 ${attempt} 次），正在自动重试…`);
       }
       if (!ok) {
         // 兜底：异常退出会留下「半初始化」的数据，导致之后每次都崩。
         // 清一次应用数据再拉起来，成功率最高（用户不必自己去设置里清缓存）。
-        onLog('O aplicativo continuou encerrando, redefinindo dados do app e tentando novamente…');
+        onLog('应用连续退出，正在重置应用数据后重试…');
         await rt.client.shell(`pm clear ${pkg}`, { timeout: 20000 }).catch(() => '');
         await sleep(800);
         // pm clear 会把运行时权限一并清掉，必须重新授，否则会卡在系统授权框
@@ -575,14 +615,14 @@ class Installer {
         if (!ok) await rt.client.dismissPermissionDialog().catch(() => {});
       }
       if (!ok) {
-        const err = new Error('O aplicativo encerrou imediatamente após iniciar. As tentativas automáticas e redefinição de dados não resolveram');
+        const err = new Error('应用启动后立即退出，已自动重试并重置应用数据仍未成功');
         err.code = 'APP_UNSTABLE';
         throw err;
       }
     } catch (e) {
       if (e.code === 'APP_CRASHED' && !this.runtime.provisioner.playImageInfo().ok) {
         // 崩溃来自 ARM 翻译层：自动切镜像、重装备份 APK、再启动一次
-        onLog('Falha na camada de tradução ARM detectada, alternando automaticamente para imagem compatível…');
+        onLog('检测到 ARM 翻译层崩溃，正在自动切换兼容镜像…');
         await this.ensureCompatImage(onLog ? (m) => onLog(m.message || '') : () => {});
         const rt2 = await this.switchToCompat((m) => onLog(m.message || ''));
         if (app && app.apkPath && fs.existsSync(app.apkPath)) {
