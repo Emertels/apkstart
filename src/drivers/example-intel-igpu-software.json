@@ -1,10 +1,10 @@
 {
   "format": "apkstart-driver/1",
   "id": "example-intel-igpu-software",
-  "name": "Intel 核显 · 软件渲染兜底（示例）",
+  "name": "GPU Integrada Intel · Renderização por software de contingência (Exemplo)",
   "version": "1.0.0",
   "author": "ApkStart",
-  "description": "老款 Intel 核显（HD / UHD 6xx 之前）在部分驱动版本上会出现 GLES 初始化失败或花屏。把渲染后端固定为 software，画面一定能出来。",
+  "description": "GPUs integradas Intel mais antigas (anteriores a HD / UHD 6xx) podem apresentar falhas de inicialização do GLES ou artefatos gráficos em certas versões de driver. Fixar o backend em 'software' garante que a imagem sempre seja exibida.",
   "enabled": false,
   "priority": 0,
   "match": {
@@ -18,7 +18,7 @@
       "hw.gpu.enabled": "yes"
     },
     "notes": [
-      "画面能出来但游戏会卡：这类机器更适合玩轻量应用"
+      "A imagem será exibida, mas jogos ficarão lentos: ideal para aplicativos mais leves."
     ]
   }
 }

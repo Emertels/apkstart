@@ -1,10 +1,10 @@
 {
   "format": "apkstart-driver/1",
   "id": "example-amd-igpu-swangle",
-  "name": "AMD 核显 · 改用 swangle 渲染（示例）",
+  "name": "GPU Integrada AMD · Usar renderização swangle (Exemplo)",
   "version": "1.0.0",
   "author": "ApkStart",
-  "description": "部分 AMD 核显 + 老驱动下，-gpu host 能通过 emulator 自检，但 guest 起来十几秒后进程直接崩溃（日志里只有 AEHD is operational）。把渲染后端固定成 swangle 可以绕过，代价是帧率略低。",
+  "description": "Em algumas GPUs integradas AMD com drivers antigos, '-gpu host' passa nos autotestes do emulador, mas o sistema convidado trava após alguns segundos. Fixar o renderizador em swangle contorna o problema, embora com taxa de quadros ligeiramente menor.",
   "enabled": false,
   "priority": 0,
   "match": {
@@ -14,8 +14,8 @@
   "effect": {
     "gpuMode": "swangle",
     "notes": [
-      "如果画面正常但游戏很卡，可以在设置里把「画质」调成 540×960",
-      "确认可用后，把 enabled 改成 true 或删掉这一行，就能自动生效"
+      "Se a imagem funcionar normalmente mas jogos ficarem lentos, você pode ajustar a resolução para 540x960 nas configurações.",
+      "Após confirmar o funcionamento, mude 'enabled' para true para ativar automaticamente."
     ]
   }
 }

@@ -1,10 +1,10 @@
 {
   "format": "apkstart-driver/1",
   "id": "example-no-hypervisor-tcg",
-  "name": "没有硬件加速 · 直接走软件模拟（示例）",
+  "name": "Sem aceleração por hardware · Emulação direta por software (Exemplo)",
   "version": "1.0.0",
   "author": "ApkStart",
-  "description": "机器没开「虚拟机监控程序平台」、也不允许装内核驱动时，emulator 走硬件加速会直接失败。这个补丁让 ApkStart 一开始就用软件模拟（-accel off），省掉两轮白等；同时把渲染后端换成 software，避免 GL 初始化失败。",
+  "description": "Quando a 'Plataforma de Hipervisor do Windows' não está ativada e drivers de kernel não podem ser instalados, a aceleração por hardware falha. Este perfil faz o ApkStart iniciar diretamente em emulação por software (-accel off) e renderização por software, evitando esperas e falhas de GL.",
   "enabled": false,
   "priority": 10,
   "match": {
@@ -18,7 +18,7 @@
       "hw.gpu.mode": "software"
     },
     "notes": [
-      "软件模拟比硬件加速慢 5~10 倍，能开虚拟化时建议还是去「Windows 功能」里勾上虚拟机平台"
+      "A emulação por software é de 5 a 10 vezes mais lenta que a aceleração por hardware. Se possível, ative a 'Plataforma de Hipervisor do Windows'."
     ]
   }
 }

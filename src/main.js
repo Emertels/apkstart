@@ -1679,42 +1679,36 @@ function registerIpc() {
     try {
       if (!doctor.vcRedistOk()) {
         issues.push({
-          code: 'vcRedist', severity: 'error', title: '缺少 VC++ 运行库（x64）',
-          hint: '安卓运行时依赖微软 VC++ 2015-2022，缺失会导致模拟器无法启动（0xc0000135）。', fix: 'vcRedist',
+          code: 'vcRedist', severity: 'error', title: 'Falta o Pacote Redistribuível do VC++ (x64)',
+          hint: 'O runtime do Android requer o Microsoft Visual C++ 2015-2022 Redistributable. Sem ele, o emulador não inicializa (0xc0000135).', fix: 'vcRedist',
         });
       }
       accel = await runtime.provisioner.emulatorAccel().catch(() => ({ ok: false }));
       if (!accel.ok) {
-        // 商店版和安装版的补救路径完全不同，提示必须分开写：
-        //   - 商店（MSIX）版不能装内核驱动、也通常拿不到管理员授权 → 只能引导用户
-        //     自己去「启用或关闭 Windows 功能」里勾「Windows 虚拟机监控程序平台」；
-        //   - 安装版/便携版可以一键提权开启（失败还能退 AEHD 驱动）。
-        // 以前两种版本共用一句话，商店用户看到的是「建议安装 AEHD 驱动」——
-        // 而商店版根本装不了驱动，等于指了一条死路。
         issues.push(store.STORE_BUILD
           ? {
             code: 'accel',
             severity: 'error',
-            title: '需要开启「Windows 虚拟机监控程序平台」',
-            hint: '没有它只能跑纯软件模拟，开机会慢到几分钟。'
+            title: 'É necessário ativar a Plataforma de Hipervisor do Windows',
+            hint: 'Sem ela, apenas a emulação por software pode ser executada, o que torna a inicialização muito lenta (pode levar alguns minutos).'
               + MSIX_ACCEL_HINT
-              + '（商店版无法代你提权，需要你手动操作一次，之后重启。）',
+              + ' (A versão da Loja não pode solicitar privilégios de administrador automaticamente. Ative nas Configurações do Windows e reinicie o PC.)',
             fix: 'virtualization',
           }
           : {
             code: 'accel',
             severity: 'warn',
-            title: '未启用硬件加速',
-            hint: `${accel.note || '将回退软件模拟（能跑但很慢）。'}`
-              + '点右侧「修复」会自动开启（需要管理员授权，可能要重启一次）；'
-              + '失败时会自动改装 AEHD 驱动。',
+            title: 'Aceleração por hardware não habilitada',
+            hint: `${accel.note || 'O emulador funcionará em modo software (mais lento).'}`
+              + ' Clique em "Reparar" para ativar a Plataforma de Hipervisor do Windows automaticamente (requer permissão de administrador e reinicialização);'
+              + ' Caso falhe, tentará instalar o driver AEHD.',
             fix: 'virtualization',
           });
       }
       free = doctor.freeDiskMB(runtime.provisioner.paths().root);
       if (free && free < 8192) {
         issues.push({
-          code: 'disk', severity: free < 2048 ? 'error' : 'warn', title: '运行时磁盘空间紧张',
+          code: 'disk', severity: free < 2048 ? 'error' : 'warn', title: 'Espaço em disco insuficiente no runtime',
           hint: `O disco onde está instalado o runtime tem apenas ${free} MB livres. Libere espaço ou mude de partição.`, fix: 'disk',
         });
       }
@@ -2071,8 +2065,8 @@ function registerIpc() {
           ok: true, restartNeeded: true, steps: whpx.steps,
           accel: await runtime.provisioner.emulatorAccel().catch(() => accel),
           note: whpx.steps.some((s) => s.cancelled)
-            ? '已开启「Windows 虚拟机监控程序平台」，重启电脑后生效'
-            : '已开启「Windows 虚拟机监控程序平台」，重启电脑后生效',
+            ? 'Plataforma de Hipervisor do Windows ativada. Reinicie o computador para aplicar.'
+            : 'Plataforma de Hipervisor do Windows ativada. Reinicie o computador para aplicar.',
         };
       }
       if (whpx.cancelled) {
@@ -2095,7 +2089,7 @@ function registerIpc() {
         const ps = `try { $p = Start-Process -FilePath '${esc}' -WorkingDirectory '${path.dirname(bat).replace(/'/g, "''")}' -Verb RunAs -Wait -PassThru; exit $p.ExitCode } catch { exit 2 }`;
         const proc = sp('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true });
         proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(
-          code === 2 ? '已取消管理员授权（需要点「是」才能安装驱动）' : `驱动安装失败（退出码 ${code}）`,
+          code === 2 ? 'Permissão de administrador cancelada (é necessário clicar em "Sim" para instalar o driver)' : `Falha na instalação do driver (código de saída ${code})`,
         ))));
         proc.on('error', (e) => reject(e));
       });
@@ -2363,7 +2357,7 @@ function registerIpc() {
         case 'animations': return { ok: true, ...(await androidSet.setAnimations(!!value)) };
         case 'fontScale': return { ok: true, ...(await androidSet.setFontScale(value)) };
         case 'density': return { ok: true, ...(await androidSet.setDensity(value)) };
-        default: return { ok: false, error: `未知设置项 ${key}` };
+        default: return { ok: false, error: `Opção de configuração desconhecida: ${key}` };
       }
     } catch (e) { return { ok: false, error: e.message }; }
   });

@@ -253,12 +253,15 @@ public class ApkAgent
         uint pid;
         GetWindowThreadProcessId(h, out pid);
         if (IsOurs(pid) || ConsoleOwnedByUs(pid)) return true;
-        if (_scopeDirs.Count == 0) return false;
-        // Windows titles a console with the image path it launched, so the runtime
-        // directory shows up verbatim. Precise enough to never match a stray terminal.
         string title = TitleOf(h).ToLowerInvariant();
-        for (int i = 0; i < _scopeDirs.Count; i++)
-            if (title.IndexOf(_scopeDirs[i], StringComparison.Ordinal) >= 0) return true;
+        if (_scopeDirs.Count > 0)
+        {
+            for (int i = 0; i < _scopeDirs.Count; i++)
+                if (title.IndexOf(_scopeDirs[i], StringComparison.Ordinal) >= 0) return true;
+        }
+        if ((title.IndexOf("qemu-system", StringComparison.Ordinal) >= 0 || title.IndexOf("netsimd", StringComparison.Ordinal) >= 0)
+            && (title.IndexOf("apkstart", StringComparison.Ordinal) >= 0 || title.IndexOf("emulator", StringComparison.Ordinal) >= 0))
+            return true;
         return false;
     }
 
@@ -382,7 +385,6 @@ public class ApkAgent
             if (cls.IndexOf("QWindowTool", StringComparison.Ordinal) < 0) return true;
             // QWindowToolSaveBits is what Qt uses for menus, tooltips and popup panels --
             // WeChat's emoji panel / right-click menu included. Only hide our own.
-            uint owner;
             GetWindowThreadProcessId(h, out owner);
             if (!IsOurs(owner)) return true;
             RECT r;
@@ -611,6 +613,14 @@ public class ApkAgent
         bool embedded = _emu != IntPtr.Zero && ep != IntPtr.Zero
                      && (ep == _host || ep == _chromeRender);
         IntPtr e = embedded ? _emu : FindEmulator();
+        if (_host != IntPtr.Zero && !embedded && e != IntPtr.Zero)
+        {
+            _emu = e;
+            Embed(_host, _emu);
+            Fit(-8, 30, 640, 480, false, 0);
+            ep = GetParent(_emu);
+            embedded = ep != IntPtr.Zero && (ep == _host || ep == _chromeRender);
+        }
         if (!embedded && e != IntPtr.Zero && IsWindowVisible(e)) ShowWindow(e, 0);
         HideToolWindows();
         HideConsoleWindows();
@@ -1146,7 +1156,7 @@ public class ApkAgent
             long sweepGap;
             if (_perfMode) sweepGap = (now - _bootHideStart < 10000) ? 300 : 3000;
             else sweepGap = (now - _bootHideStart < 10000) ? 250 : 1500;
-            if (_quiet && now - _bootHideSweep > sweepGap)
+            if ((_quiet || _host != IntPtr.Zero) && now - _bootHideSweep > sweepGap)
             {
                 _bootHideSweep = now;
                 QuietSweep();
@@ -1240,7 +1250,6 @@ public class ApkAgent
                             // 第一个真的成为宿主子窗口的就是它。
                             string targets = S(line, "target");
                             _emu = IntPtr.Zero;
-                            if (_quiet) { _quiet = false; _bootHideUntil = 0; }   // 别再把要嵌的窗口藏掉
                             if (!string.IsNullOrEmpty(targets))
                             {
                                 string[] pieces = targets.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
@@ -1269,6 +1278,7 @@ public class ApkAgent
                             }
                             bool ok = _emu != IntPtr.Zero
                                 && (GetParent(_emu) == _host || GetParent(_emu) == _chromeRender);
+                            if (ok && _quiet) { _quiet = false; _bootHideUntil = 0; }   // 别再把要嵌的窗口藏掉
                             _embedAt = Environment.TickCount;
                             _lastToolSweep = 0;
                             Fit((int)L(line, "x"), (int)L(line, "y"), (int)L(line, "w"), (int)L(line, "h"), true, (int)L(line, "clipTop"));

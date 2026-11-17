@@ -45,54 +45,54 @@ function friendlyInstallError(raw) {
   const tag = code ? code[0] : '';
   const table = {
     INSTALL_FAILED_NO_MATCHING_ABIS:
-      '安装失败：这个应用只提供 ARM 原生库（多数国产应用如此），'
-      + '当前系统镜像没有 ARM 转译层。ApkStart 会自动切换到内置新版翻译层的兼容镜像并重试。',
+      'Falha na instalação: Este aplicativo requer bibliotecas nativas ARM (ARM 原生库), '
+      + 'e a imagem atual do sistema não possui camada de tradução ARM. O ApkStart alternará automaticamente para uma imagem compatível.',
     INSTALL_FAILED_OLDER_SDK:
-      '安装失败：应用要求的 Android 版本高于当前运行时（需更高系统镜像）。',
+      'Falha na instalação: A versão do Android exigida pelo aplicativo é superior ao runtime atual.',
     INSTALL_PARSE_FAILED_NO_CERTIFICATES:
-      '安装失败：APK 没有有效签名，无法安装。',
+      'Falha na instalação: APK sem assinatura válida.',
     INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES:
-      '安装失败：与已安装版本签名不一致，请先卸载旧版再装。',
+      'Falha na instalação: Assinatura diferente da versão instalada. Desinstale a versão antiga primeiro.',
     INSTALL_FAILED_VERSION_DOWNGRADE:
-      '安装失败：设备上已安装更高版本，不能降级覆盖。',
+      'Falha na instalação: Versão mais recente já instalada. Não é possível fazer downgrade.',
     INSTALL_FAILED_INSUFFICIENT_STORAGE:
-      '安装失败：运行时磁盘空间不足，请清理后重试。',
+      'Falha na instalação: Espaço em disco insuficiente no runtime.',
     INSTALL_FAILED_INVALID_APK:
-      '安装失败：APK 文件损坏或不完整（可能下载未完成），请重新获取。',
-    INSTALL_FAILED_INVALID_URI: '安装失败：APK 路径含特殊字符，请把文件移到纯英文路径后重试。',
-    INSTALL_FAILED_ALREADY_EXISTS: '安装失败：已存在同名应用且签名不同，请先卸载。',
-    INSTALL_FAILED_UPDATE_INCOMPATIBLE: '安装失败：与已安装版本签名不一致，请先卸载旧版。',
+      'Falha na instalação: Arquivo APK corrompido ou incompleto (损坏 / 不完整).',
+    INSTALL_FAILED_INVALID_URI: 'Falha na instalação: Caminho do APK com caracteres especiais. Mova para um caminho simples.',
+    INSTALL_FAILED_ALREADY_EXISTS: 'Falha na instalação: Já existe um aplicativo idêntico com assinatura diferente.',
+    INSTALL_FAILED_UPDATE_INCOMPATIBLE: 'Falha na instalação: Assinatura incompatível com a versão instalada.',
     INSTALL_FAILED_DEPRECATED_SDK_VERSION:
-      '安装失败：这是面向很老 Android 版本的应用（targetSdk 过低），Android 14 默认禁止安装。'
-      + 'ApkStart 会自动用官方绕过参数重试。',
-    INSTALL_FAILED_TEST_ONLY: '安装失败：这是仅供测试的应用包，已自动加上测试包参数重试。',
-    INSTALL_FAILED_MISSING_SHARED_LIBRARY: '安装失败：应用依赖的设备特性（如特定厂商库）在当前运行时不存在。',
-    INSTALL_FAILED_USER_RESTRICTION: '安装失败：系统限制了安装，请重启运行时后重试。',
-    INSTALL_FAILED_CONFLICTING_PROVIDER: '安装失败：与已有应用的 ContentProvider 冲突，请卸载冲突应用。',
-    INSTALL_FAILED_INTERNAL_ERROR: '安装失败：系统内部错误（常见于存储空间不足或开机未完成），请重启运行时后重试。',
+      'Falha na instalação: Aplicativo destinado a versões antigas do Android (targetSdk baixo). '
+      + 'O Android 14 bloqueia por padrão, mas o ApkStart tentará instalar automaticamente (自动) com parâmetros de compatibilidade.',
+    INSTALL_FAILED_TEST_ONLY: 'Falha na instalação: Pacote exclusivo de testes (parâmetro de teste aplicado automaticamente).',
+    INSTALL_FAILED_MISSING_SHARED_LIBRARY: 'Falha na instalação: O aplicativo depende de bibliotecas ou recursos ausentes no runtime.',
+    INSTALL_FAILED_USER_RESTRICTION: 'Falha na instalação: Instalação restrita pelo sistema. Reinicie o runtime.',
+    INSTALL_FAILED_CONFLICTING_PROVIDER: 'Falha na instalação: Conflito de ContentProvider com outro aplicativo.',
+    INSTALL_FAILED_INTERNAL_ERROR: 'Falha na instalação: Erro interno do sistema. Reinicie o runtime.',
   };
   const msg = table[tag];
-  return msg ? `${msg}（${tag}）` : `安装失败：${raw}`;
+  return msg ? `${msg} (${tag})` : `Falha na instalação: ${raw}`;
 }
 
 /** 把启动后的崩溃日志翻译成能看懂的原因 */
 function friendlyLaunchError(raw, pkg) {
   const t = String(raw || '');
   if (/DoBadTrampoline|libndk_translation|houdini|SIGABRT.*arm/i.test(t)) {
-    return `${pkg || '应用'} 启动后崩溃：ARM 翻译层与该应用的信号处理不兼容。`
-      + 'ApkStart 会自动切换到 Android 14 兼容镜像后重试。';
+    return `${pkg || 'Aplicativo'} travou após iniciar: Camada de tradução ARM (ARM 翻译层) incompatível com as instruções do app. `
+      + 'O ApkStart alternará automaticamente para a imagem compatível (兼容镜像) do Android 14.';
   }
   if (/UnsatisfiedLinkError|dlopen failed|couldn't find "lib|\.so.*not found/i.test(t)) {
-    return `${pkg || '应用'} 启动后崩溃：缺少设备原生库（应用可能只提供 ARM 版本）。`
-      + '会自动切换到带 ARM 翻译层的兼容镜像后重试。';
+    return `${pkg || 'Aplicativo'} travou após iniciar: Bibliotecas nativas ausentes (ARM). `
+      + 'Alternando automaticamente para a imagem compatível com tradução ARM.';
   }
   if (/ClassNotFoundException|NoClassDefFoundError|AndroidRuntime/i.test(t)) {
-    return `${pkg || '应用'} 启动即崩溃（应用内部异常，可能与模拟器环境或缺少 Google 服务有关）。`;
+    return `${pkg || 'Aplicativo'} travou ao iniciar (exceção interna do app no emulador).`;
   }
   if (/java\.lang\.SecurityException|Permission Denial/i.test(t)) {
-    return `${pkg || '应用'} 启动失败：系统拒绝了启动请求（权限或签名问题）。`;
+    return `${pkg || 'Aplicativo'} falhou ao iniciar: Permissão ou assinatura negada pelo sistema.`;
   }
-  return `${pkg || '应用'} 未能启动${t ? `：${t.slice(0, 240)}` : '（进程未存活）'}`;
+  return `${pkg || 'Aplicativo'} não pôde iniciar${t ? `: ${t.slice(0, 240)}` : ' (o processo foi encerrado)'}`;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
