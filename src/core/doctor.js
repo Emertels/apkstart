@@ -521,9 +521,9 @@ function diagnose(lines) {
 
 /** 人类可读的一行摘要，放在设置页让高级用户知道自动选了什么 */
 function describeProfile(p) {
-  return `自动：${(p.memoryMB / 1024).toFixed(1)}GB 内存 · ${p.cores} 核 · ${p.gpu} 渲染 · `
-    + `${p.accelOk ? '硬件加速' : '软件模拟'} · ${p.snapshot ? '按需快照' : '冷启动'}`
-    + `${p.lite ? ' · 轻量容器' : ''} · 端口 ${p.port}`;
+  return `Automático: ${(p.memoryMB / 1024).toFixed(1)} GB RAM · ${p.cores} núcleos · Renderização ${p.gpu} · `
+    + `${p.accelOk ? 'Aceleração por Hardware' : 'Emulação por Software'} · ${p.snapshot ? 'Snapshot sob demanda' : 'Cold Boot'}`
+    + `${p.lite ? ' · Contêiner Leve' : ''} · Porta ${p.port}`;
 }
 
 /** 导出诊断报告（纯文本，便于发邮件/贴 issue） */

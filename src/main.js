@@ -3,7 +3,7 @@
  * ApkStart 主进程
  * 职责：窗口 / 托盘 / 单实例 / 命令行分发（双击 apk、桌面快捷方式启动）/ IPC
  */
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell, nativeImage, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell, nativeImage, screen, globalShortcut, nativeTheme } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -2455,6 +2455,21 @@ function registerIpc() {
 
   ipcMain.handle('app:restart', () => {
     setTimeout(() => { quitting = true; app.quit(); }, 200);
+    return { ok: true };
+  });
+
+  ipcMain.handle('theme:set', (_e, theme) => {
+    try {
+      const isDark = theme !== 'light';
+      nativeTheme.themeSource = isDark ? 'dark' : 'light';
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.setTitleBarOverlay) {
+        mainWindow.setTitleBarOverlay({
+          color: isDark ? '#161c18' : '#ffffff',
+          symbolColor: isDark ? '#2ee6a6' : '#14201a',
+          height: 44,
+        });
+      }
+    } catch (_) {}
     return { ok: true };
   });
 }
