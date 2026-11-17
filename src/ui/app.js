@@ -1,23 +1,36 @@
-(function initTheme() {
-  const saved = localStorage.getItem('apkstart_theme');
-  const theme = saved || 'dark';
-  document.documentElement.setAttribute('data-theme', theme);
-  if (window.apkstart && window.apkstart.setTheme) window.apkstart.setTheme(theme);
-  window.addEventListener('DOMContentLoaded', () => {
+function applyTheme(theme) {
+  const t = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('apkstart_theme', t); } catch (_) {}
+  if (window.apkstart && window.apkstart.setTheme) {
+    try { window.apkstart.setTheme(t); } catch (_) {}
+  }
+}
+
+function initTheme() {
+  let saved = 'dark';
+  try { saved = localStorage.getItem('apkstart_theme') || 'dark'; } catch (_) {}
+  applyTheme(saved);
+
+  const bindToggle = () => {
     const btn = document.getElementById('btnThemeToggle');
     if (btn) {
-      btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-      btn.onclick = () => {
-        const cur = document.documentElement.getAttribute('data-theme');
+      btn.onclick = (e) => {
+        if (e) e.stopPropagation();
+        const cur = document.documentElement.getAttribute('data-theme') || 'dark';
         const next = cur === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        if (window.apkstart && window.apkstart.setTheme) window.apkstart.setTheme(next);
-        localStorage.setItem('apkstart_theme', next);
-        btn.textContent = next === 'dark' ? '☀️' : '🌙';
+        applyTheme(next);
       };
     }
-  });
-})();
+  };
+
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', bindToggle);
+  } else {
+    bindToggle();
+  }
+}
+initTheme();
 
 'use strict';
 
@@ -749,7 +762,7 @@ async function updateVolumeSliderStyle(val) {
   }
 }
 
-function refreshAndroid() {
+async function refreshAndroid() {
   const el = $('androidStatus');
   if (!el) return;
   el.textContent = 'Carregando...';
@@ -764,7 +777,7 @@ function refreshAndroid() {
   $('setAndroidAirplane').checked = !!r.airplane;
   $('setAndroidAnim').checked = !r.animationsOff;
   $('setAndroidVolume').value = r.volume;
-    updateVolumeSliderStyle(r.volume);
+  updateVolumeSliderStyle(r.volume);
   $('androidVolumeText').textContent = `${r.volume}%`;
   if (r.fontScale) $('setAndroidFont').value = Number(r.fontScale).toFixed(2);
   if (r.density) {
@@ -834,7 +847,7 @@ async function refreshResources() {
   const free = Number(r.freeMB) || Number((r.current && r.current.freeMB) || 0);
   bNote.textContent = `PC Host: ${gb(host.totalMB)} RAM / ${host.cores} núcleos; `
     + `Alocação máxima de ${gb(lim.maxMB)} RAM e até ${Math.max(1, (host.cores || 1) - 1)} núcleos (reserva de 25% de RAM e 1 núcleo para o Windows). `
-      + `Limite da partição: ${lim.maxGB || 0} GB${free ? ` (${(free / 1024).toFixed(1)} GB livres no disco)` : ''}.`;
+    + `Limite da partição: ${lim.maxGB || 0} GB${free ? ` (${(free / 1024).toFixed(1)} GB livres no disco)` : ''}.`
     + (r.verdict && r.verdict.note ? ` ${r.verdict.note}` : '');
 }
 
@@ -1096,35 +1109,50 @@ async function refreshDataInfo() {
 }
 
 async function openSettings() {
-  state.settings = await api.getSettings();
-  fillSettings(state.settings);
-  const info = await api.info();
-  $('setRuntimeDir').value = info.runtimeDir || info.dataDir;
-  if ($('setAvdDir')) {
-    const di = await api.dataInfo().catch(() => null);
-    $('setAvdDir').value = (di && di.avdDir) || '';
+  $('settingsMask').classList.add('on');
+  try {
+    state.settings = await api.getSettings();
+    fillSettings(state.settings);
+  } catch (e) {
+    console.error('Falha ao carregar configurações:', e);
   }
-  const verEl = document.getElementById('aboutVer');
-  if (verEl && info.version) verEl.textContent = `v${info.version}`;
-  const curVerEl = document.getElementById('updateCurrent');
-  if (curVerEl && info.version) curVerEl.textContent = `v${info.version}`;
-  const assoc = await api.assocStatus();
-  const btn = $('btnAssoc');
-  btn.textContent = assoc.registered ? 'Associado · Desassociar' : 'Não associado · Ativar';
-  btn.dataset.on = assoc.registered ? '1' : '0';
+  try {
+    const info = await api.info();
+    if ($('setRuntimeDir')) $('setRuntimeDir').value = info.runtimeDir || info.dataDir || '';
+    if ($('setAvdDir')) {
+      const di = await api.dataInfo().catch(() => null);
+      $('setAvdDir').value = (di && di.avdDir) || '';
+    }
+    const verEl = document.getElementById('aboutVer');
+    if (verEl && info.version) verEl.textContent = `v${info.version}`;
+    const curVerEl = document.getElementById('updateCurrent');
+    if (curVerEl && info.version) curVerEl.textContent = `v${info.version}`;
+  } catch (e) {
+    console.warn('api.info falhou:', e);
+  }
+  try {
+    const assoc = await api.assocStatus().catch(() => ({ registered: false }));
+    const btn = $('btnAssoc');
+    if (btn) {
+      btn.textContent = assoc.registered ? 'Associado · Desassociar' : 'Não associado · Ativar';
+      btn.dataset.on = assoc.registered ? '1' : '0';
+    }
+  } catch (_) {}
 
   api.doctorProfile().then((r) => {
-    if (r && r.text) $('autoProfileText').textContent = r.text;
-  }).catch(() => { $('autoProfileText').textContent = 'Modo Automático'; });
+    if (r && r.text && $('autoProfileText')) $('autoProfileText').textContent = r.text;
+  }).catch(() => { if ($('autoProfileText')) $('autoProfileText').textContent = 'Modo Automático'; });
+
   api.runtimeUsage().then((u) => {
-    $('usageText').textContent = u
+    if ($('usageText')) {
+      $('usageText').textContent = u
         ? `Total: ${u.totalText}${u.reclaimable ? ` · Liberável: ${u.reclaimableText} (${u.count} itens)` : ' · Otimizado'}`
         : 'Estatísticas indisponíveis';
-  }).catch(() => { $('usageText').textContent = 'Estatísticas indisponíveis'; });
+    }
+  }).catch(() => { if ($('usageText')) $('usageText').textContent = 'Estatísticas indisponíveis'; });
 
-  $('settingsMask').classList.add('on');
-  refreshAndroid();
-  refreshDataInfo();
+  refreshAndroid().catch(() => {});
+  refreshDataInfo().catch(() => {});
 }
 
 function closeSettings() {
@@ -1500,8 +1528,8 @@ function bindSettings() {
       toast({
         title: mode === 'auto' ? 'Orientação: Automática (segue o app)' : (mode === 'landscape' ? 'Orientação: Forçar Paisagem' : 'Orientação: Forçar Retrato'),
         body: mode === 'auto'
-        ? 'A orientação da tela seguirá automaticamente o layout declarado pelo app.'
-        : 'A orientação selecionada será mantida de forma fixa.';
+          ? 'A orientação da tela seguirá automaticamente o layout declarado pelo app.'
+          : 'A orientação selecionada será mantida de forma fixa.',
         type: 'ok',
       });
     });
